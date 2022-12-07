@@ -53,6 +53,7 @@ QLinearOpsRegistry = {
     "Split": QSplit,
     "Pad": QPad,
     "Reshape": Direct8BitOp,
+    "Flatten": Direct8BitOp,
     "Squeeze": Direct8BitOp,
     "Unsqueeze": Direct8BitOp,
     "Resize": QResize,
