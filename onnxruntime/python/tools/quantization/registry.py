@@ -5,6 +5,7 @@ from .operators.base_operator import QuantOperatorBase
 from .operators.binary_op import QLinearBinaryOp
 from .operators.concat import QLinearConcat
 from .operators.conv import ConvInteger, QDQConv, QLinearConv
+from .operators.convtranspose2d import QLinearConvTranspose
 from .operators.direct_q8 import Direct8BitOp, QDQDirect8BitOp
 from .operators.embed_layernorm import EmbedLayerNormalizationQuant
 from .operators.gather import GatherQuant, QDQGather
