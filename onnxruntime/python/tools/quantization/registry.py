@@ -39,6 +39,7 @@ IntegerOpsRegistry.update(CommonOpsRegistry)
 QLinearOpsRegistry = {
     "ArgMax": QArgMax,
     "Conv": QLinearConv,
+    "ConvTranspose": QLinearConvTranspose,
     "Gemm": QLinearGemm,
     "MatMul": QLinearMatMul,
     "Add": QLinearBinaryOp,
