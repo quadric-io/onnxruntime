@@ -1,22 +1,29 @@
 import onnx
 
 from ..quant_utils import QuantizedValue, QuantizedValueType, attribute_to_kwarg, ms_domain
+from .base_operator import QuantOperatorBase
 from .direct_q8 import Direct8BitOp, QDQDirect8BitOp
 
-"""
-Inserts QLinear before MaxPool layers and force MaxPool to handle int8
-"""
+
 class QMaxPool(Direct8BitOp):
     def __init__(self, onnx_quantizer, onnx_node):
         super().__init__(onnx_quantizer, onnx_node)
+        self.qa = QuantOperatorBase(onnx_quantizer, onnx_node)
 
     def quantize(self):
         node = self.node
         assert node.op_type == "MaxPool"
-        print("Q CODE FOR MAX POOL CUSTOM")
+        print(f"Custom quantization code for {node.op_type}")
 
         nodes = []
-        quantized_input_value = self.quantizer.quantized_value_map[node.input[0]]
+
+        if node.input[0] not in self.quantizer.quantized_value_map:
+            (
+                quantized_input_names,
+                zero_point_names,
+                scale_names,
+                nodes,
+            ) = self.qa.quantizer.quantize_activation(node, [0])
 
         # Create an entry for output quantized value.
         quantized_input_value = self.quantizer.quantized_value_map[node.input[0]]
