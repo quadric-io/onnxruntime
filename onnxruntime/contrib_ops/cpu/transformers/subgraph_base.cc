@@ -26,6 +26,8 @@ Subgraph::Subgraph(
       head_size(0),
       vocab_size(0),
       num_layers(0),
+      past_present_share_buffer_(false),
+      has_decoder_masked_multihead_attention_(false),
       allocator_(nullptr),
       is_output_float16_(false) {
   num_implicit_inputs = static_cast<int>(node.ImplicitInputDefs().size());
@@ -47,6 +49,13 @@ Subgraph::Subgraph(
   subgraph_output_names.reserve(num_subgraph_outputs);
   for (int i = 0; i < num_subgraph_outputs; ++i) {
     subgraph_output_names.push_back(subgraph_outputs[i]->Name());
+  }
+
+  for (const auto& n : subgraph.Nodes()) {
+    if (n.OpType() == "DecoderMaskedMultiheadAttention") {
+      has_decoder_masked_multihead_attention_ = true;
+      break;
+    }
   }
 }
 
@@ -77,7 +86,17 @@ Status Subgraph::Setup(const SessionState& session_state,
       const auto& location = utils::FindMemoryInfoForValue(session_state, feed_names[i]);
       feed_locations.push_back(location.device);
     } else {
-      feed_locations.push_back(default_location.device);
+      if (feed_names[i] == "past_sequence_length") {
+        // when past_sequence_length is needed in subgraph, treat it as past_present_share_buffer
+        past_present_share_buffer_ = true;
+        // past_sequence_length is on CPU memory
+        feed_locations.push_back(OrtDevice());
+      } else if (feed_names[i] == "beam_width") {
+        // beam_width is on CPU memory
+        feed_locations.push_back(OrtDevice());
+      } else {
+        feed_locations.push_back(default_location.device);
+      }
     }
   }
 
@@ -108,7 +127,9 @@ const IExecutionProvider* Subgraph::GetProvider() const {
   const ExecutionProviders& providers = session_state_->GetExecutionProviders();
   const IExecutionProvider* cpu_provider = providers.Get(onnxruntime::kCpuExecutionProvider);
   const IExecutionProvider* cuda_provider = providers.Get(onnxruntime::kCudaExecutionProvider);
-  const IExecutionProvider* provider = cuda_provider ? cuda_provider : cpu_provider;
+  const IExecutionProvider* rocm_provider = providers.Get(onnxruntime::kRocmExecutionProvider);
+  const IExecutionProvider* gpu_provider = cuda_provider ? cuda_provider : rocm_provider;
+  const IExecutionProvider* provider = gpu_provider ? gpu_provider : cpu_provider;
   return provider;
 }
 

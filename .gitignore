@@ -1,8 +1,6 @@
 # build, distribute, and bins (+ python proto bindings)
 build
-build_host_protoc
-build_android
-build_ios
+build_*/
 .build_debug/*
 .build_release/*
 distribute/*
@@ -43,9 +41,6 @@ onnxprofile_profile_test_*.json
 /csharp/src/Microsoft.ML.OnnxRuntime/targets/**/*.props
 cmake/external/FeaturizersLibrary/
 # Java specific ignores
-java/gradlew
-java/gradlew.bat
-java/gradle
 java/.gradle
 java/hs_*.log
 onnxruntime/python/version_info.py
@@ -56,3 +51,10 @@ onnxruntime/python/version_info.py
 .envrc
 .psenvrc
 *.csproj.user
+# clangd
+.cache/
+compile_commands.json
+# Rust specific
+rust/**/target
+rust/**/Cargo.lock
+rust/onnxruntime/synset.txt

@@ -51,6 +51,14 @@ bool NodeGroupSelector::CheckQDQNodes(const GraphViewer& graph_viewer, const Nod
     return false;
   }
 
+  auto does_node_produce_graph_output = [&graph_viewer](const Node* node_ptr) {
+    return graph_viewer.NodeProducesGraphOutput(*node_ptr);
+  };
+
+  if (std::any_of(dq_nodes.begin(), dq_nodes.end(), does_node_produce_graph_output)) {
+    return false;
+  }
+
   if (q_nodes.empty()) {
     return is_empty_q_nodes_allowed;
   }
@@ -307,6 +315,41 @@ bool GemmNodeGroupSelector::Check(const GraphViewer& graph_viewer,
 
 void GemmSelector::UpdateBuilder(NodesToOptimizeIndicesBuilder& builder) const {
   builder.input_nodes.resize(3, NodesToOptimizeIndices::kEmptyNodeIndex);
+}
+
+bool WhereNodeGroupSelector::Check(const GraphViewer &graph_viewer, const Node &node,
+                                   const std::vector<const Node *> &dq_nodes,
+                                   const std::vector<const Node *> &q_nodes) const {
+  // Where has 1 boolean input and 2 dq inputs
+  if (!CheckQDQNodes(graph_viewer, node, dq_nodes, q_nodes,2)) {
+    return false;
+  }
+
+  const int32_t  dt_input_1 = dq_nodes[0]->InputDefs()[0]->TypeAsProto()->tensor_type().elem_type();
+  const int32_t dt_input_2 = dq_nodes[1]->InputDefs()[0]->TypeAsProto()->tensor_type().elem_type();
+  const int32_t dt_output = q_nodes[0]->OutputDefs()[0]->TypeAsProto()->tensor_type().elem_type();
+  return dt_input_1 == dt_input_2 &&
+         dt_input_1 == dt_output;
+
+}
+
+bool InstanceNormalizationNodeGroupSelector::Check(const GraphViewer& graph_viewer,
+                                                   const Node& node,
+                                                   const std::vector<const Node*>& dq_nodes,
+                                                   const std::vector<const Node*>& q_nodes) const {
+  if (!CheckQDQNodes(graph_viewer, node, dq_nodes, q_nodes)) {
+    return false;
+  }
+
+  int32_t dt_input = dq_nodes[0]->InputDefs()[0]->TypeAsProto()->tensor_type().elem_type();
+  int32_t dt_scale = dq_nodes[1]->InputDefs()[0]->TypeAsProto()->tensor_type().elem_type();
+  int32_t dt_bias = dq_nodes[2]->InputDefs()[0]->TypeAsProto()->tensor_type().elem_type();
+  int32_t dt_output = q_nodes[0]->OutputDefs()[0]->TypeAsProto()->tensor_type().elem_type();
+
+  // Input, output, and scale need to be the same type. The bias is int32.
+  return (dt_input == dt_output) &&
+         (dt_input == dt_scale) &&
+         (dt_bias == ONNX_NAMESPACE::TensorProto_DataType::TensorProto_DataType_INT32);
 }
 
 }  // namespace QDQ
