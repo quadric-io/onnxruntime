@@ -35,7 +35,10 @@ class Direct8BitOp(QuantOperatorBase):
 
         else:
             # Force quantize those ops if possible, use exclude node list if this is not you want
-            if not self.quantizer.is_valid_quantize_weight(node.input[0]):
+            # TODO: this check seems overly restrictive, for now add an exception to allow MaxPool
+            # forced quantization but invesigate full removing the check
+            if not self.quantizer.is_valid_quantize_weight(node.input[0]) and\
+                node.op_type != 'MaxPool':
                 super().quantize()
                 return
 
