@@ -44,14 +44,13 @@ struct ConvTransposeAttributes : public ConvAttributes {
   };
 
   Status PrepareForCompute(OpKernelContext* context, bool has_bias, Prepare& p,
-                           bool dynamic_padding = false, const TensorShape* filter_shape = nullptr) const {
+                           bool dynamic_padding = false, const TensorShape* filter_shape = nullptr, bool is_quant = false) const {
     const Tensor* X = context->Input<Tensor>(0);
-    const Tensor* F = (filter_shape != nullptr) ? nullptr : context->Input<Tensor>(1);
+    const Tensor* F = (filter_shape != nullptr) ? nullptr : context->Input<Tensor>(is_quant ? 3 : 1);
     const TensorShape& F_Shape = (filter_shape != nullptr) ? *filter_shape : F->Shape();
-    const Tensor* Pads = dynamic_padding ? context->Input<Tensor>(2) : nullptr;
-    const Tensor* B = has_bias ? (dynamic_padding ? context->Input<Tensor>(3) : context->Input<Tensor>(2)) : nullptr;
+    const Tensor* Pads = dynamic_padding ? context->Input<Tensor>(is_quant ? 4 : 2) : nullptr;
+    const Tensor* B = has_bias ? (dynamic_padding ? context->Input<Tensor>(is_quant ? 9 : 3) : context->Input<Tensor>(is_quant ? 8 : 2)) : nullptr;
     TensorShape input_shape = X->Shape().Slice(2);
-
     const int64_t num_input_channels = X->Shape()[1];
     const int64_t N = X->Shape()[0];
     const int64_t num_output_channels_multiplier = F_Shape[1];
