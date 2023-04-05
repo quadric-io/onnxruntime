@@ -24,6 +24,7 @@ enum class QLinearOpType : uint8_t {
   QLinearConcat,
   QLinearGlobalAveragePool,
   QLinearLeakyRelu,
+  QLinearConvTranspose,
 };
 
 QLinearOpType GetQLinearOpType(const onnxruntime::Node& node) {
@@ -52,6 +53,8 @@ QLinearOpType GetQLinearOpType(const onnxruntime::Node& node) {
     return QLinearOpType::QLinearGlobalAveragePool;
   else if (op_type == "QLinearLeakyRelu")
     return QLinearOpType::QLinearLeakyRelu;
+  else if (op_type == "QLinearConvTranspose")
+    return QLinearOpType::QLinearConvTranspose;
 
   return QLinearOpType::Unknown;
 }
@@ -70,7 +73,8 @@ bool IsBinaryQLinearOp(QLinearOpType type) {
   return type == QLinearOpType::QLinearConv ||
          type == QLinearOpType::QLinearMatMul ||
          type == QLinearOpType::QLinearAdd ||
-         type == QLinearOpType::QLinearMul;
+         type == QLinearOpType::QLinearMul ||
+         type == QLinearOpType::QLinearConvTranspose;
 }
 
 // Ops have 1 or more inputs
