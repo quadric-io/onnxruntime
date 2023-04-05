@@ -2,7 +2,7 @@ import numpy as np
 import onnx
 from onnx import onnx_pb as onnx_proto
 
-from ..quant_utils import TENSOR_NAME_QUANT_SUFFIX, QuantizedValue, QuantizedValueType, attribute_to_kwarg
+from ..quant_utils import TENSOR_NAME_QUANT_SUFFIX, QuantizedValue, QuantizedValueType, attribute_to_kwarg, ms_domain
 from .base_operator import QuantOperatorBase
 
 
@@ -68,6 +68,7 @@ class QLinearConvTranspose(QuantOperatorBase):
         qlinear_conv_name = qlinear_conv_name = node.name + "_quant" if node.name != "" else ""
 
         kwargs = {}
+        kwargs["domain"] = ms_domain
         for attribute in node.attribute:
             kwargs.update(attribute_to_kwarg(attribute))
         qlinear_conv_inputs = []
