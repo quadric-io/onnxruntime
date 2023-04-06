@@ -49,7 +49,6 @@ class QLinearConvTranspose : public OpKernel {
   Status DoConvTranspose(OpKernelContext* context) const;
 
  private:
-
   static float ComputeOutputScale(OpKernelContext* context) {
     const Tensor* X_scale = context->Input<Tensor>(InputTensors::IN_X_SCALE);
     const Tensor* W_scale = context->Input<Tensor>(InputTensors::IN_W_SCALE);
@@ -161,18 +160,19 @@ Status QLinearConvTranspose<T>::DoConvTranspose(OpKernelContext* context) const 
       p.num_input_channels / conv_transpose_attrs_.group,
       kernel_dim);
 
-  //Compute the GEMM in int32 for now, MlassGemm requires uint8 input and MlasSymmQgemmBatch is ARM only
-  //TODO: investigate ways of offseting the data with a virtual zero point
+  //TODO: add support for assymmetric quantization and using int8 MlassGemm. This will require offseting the
+  //input data to an uint8 range and passing a zero point parameter.
+  //For now compute the GEMM in int32, as MlassGemm requires uint8 input and MlasSymmQgemmBatch is ARM only
   auto inp_i32_buffer = alloc->Alloc(SafeInt<size_t>(sizeof(ActType)) * p.X->Shape().Size());
   BufferUniquePtr inp_i32(inp_i32_buffer, BufferDeleter(alloc));
   ActType* inp_i32_data = static_cast<ActType*>(inp_i32.get());
-  for(std::int64_t i = 0; i < p.X->Shape().Size(); i++){
+  for (std::int64_t i = 0; i < p.X->Shape().Size(); i++) {
     inp_i32_data[i] = Xdata[i];
   }
   auto wt_i32_buffer = alloc->Alloc(SafeInt<size_t>(sizeof(ActType)) * p.F->Shape().Size());
   BufferUniquePtr wt_i32(wt_i32_buffer, BufferDeleter(alloc));
   ActType* wt_i32_data = static_cast<ActType*>(wt_i32.get());
-  for(std::int64_t i = 0; i < p.F->Shape().Size(); i++){
+  for (std::int64_t i = 0; i < p.F->Shape().Size(); i++) {
     wt_i32_data[i] = static_cast<T*>(trans_filt.get())[i];
   }
   auto out_i32_buffer = alloc->Alloc(SafeInt<size_t>(sizeof(ActType)) * p.Y->Shape().Size());
@@ -181,17 +181,14 @@ Status QLinearConvTranspose<T>::DoConvTranspose(OpKernelContext* context) const 
 
   for (auto image_id = 0; image_id < p.N; ++image_id) {
     for (int group_id = 0; group_id < conv_transpose_attrs_.group; ++group_id) {
-      math::MatMul(kernel_dim, input_image_size, p.num_input_channels / conv_transpose_attrs_.group, 
-             wt_i32_data + group_id * W_offset, 
-             inp_i32_data + group_id * X_offset, 
-             col_buffer_data, 
-             nullptr);
+      math::MatMul(kernel_dim, input_image_size, p.num_input_channels / conv_transpose_attrs_.group,
+                   wt_i32_data + group_id * W_offset,
+                   inp_i32_data + group_id * X_offset,
+                   col_buffer_data,
+                   nullptr);
 
-      // Col2im is only registered for float, though I see no reason for that
-      // TODO: use this nasty hack for now, then change col2im to
-      // typed registration and add support for int32_t
-      math::Col2im<float, CPUMathUtil, StorageOrder::NCHW>(
-          reinterpret_cast<const float *>(col_buffer_data),
+      math::Col2im<ActType, CPUMathUtil, StorageOrder::NCHW>(
+          reinterpret_cast<ActType*>(col_buffer_data),
           p.num_output_channels / conv_transpose_attrs_.group,
           p.Y->Shape()[2],
           p.Y->Shape()[3],
@@ -205,7 +202,7 @@ Status QLinearConvTranspose<T>::DoConvTranspose(OpKernelContext* context) const 
           p.pads[3],
           p.strides[0],
           p.strides[1],
-          reinterpret_cast<float *>(out_i32_data + group_id * Y_offset),
+          reinterpret_cast<ActType*>(out_i32_data + group_id * Y_offset),
           &CPUMathUtil::Instance());
     }
 
@@ -216,17 +213,17 @@ Status QLinearConvTranspose<T>::DoConvTranspose(OpKernelContext* context) const 
     }
 
     MlasRequantizeOutput(out_i32_data,
-                        p.Y->Shape()[2] * p.Y->Shape()[3],
-                        Ydata,
-                        p.Y->Shape()[2] * p.Y->Shape()[3],
-                        nullptr,
-                        &scale_value,
-                        false,
-                        (T)0,
-                        0,
-                        0,
-                        p.num_output_channels,
-                        p.Y->Shape()[2] * p.Y->Shape()[3]);
+                         p.Y->Shape()[2] * p.Y->Shape()[3],
+                         Ydata,
+                         p.Y->Shape()[2] * p.Y->Shape()[3],
+                         nullptr,
+                         &scale_value,
+                         false,
+                         (T)0,
+                         0,
+                         0,
+                         p.num_output_channels,
+                         p.Y->Shape()[2] * p.Y->Shape()[3]);
     Xdata += X_offset * conv_transpose_attrs_.group;
     Ydata += Y_offset * conv_transpose_attrs_.group;
   }
