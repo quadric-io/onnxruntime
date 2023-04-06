@@ -48,7 +48,10 @@ struct ConvTransposeAttributes : public ConvAttributes {
     const Tensor* X = context->Input<Tensor>(0);
     const Tensor* F = (filter_shape != nullptr) ? nullptr : context->Input<Tensor>(is_quant ? 3 : 1);
     const TensorShape& F_Shape = (filter_shape != nullptr) ? *filter_shape : F->Shape();
-    const Tensor* Pads = dynamic_padding ? context->Input<Tensor>(is_quant ? 4 : 2) : nullptr;
+    if (dynamic_padding && is_quant) {
+      return ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_ARGUMENT, "dynamic padding is not supported for quantized conv tranpose.");
+    }
+    const Tensor* Pads = dynamic_padding ? context->Input<Tensor>(2) : nullptr;
     const Tensor* B = has_bias ? (dynamic_padding ? context->Input<Tensor>(is_quant ? 9 : 3) : context->Input<Tensor>(is_quant ? 8 : 2)) : nullptr;
     TensorShape input_shape = X->Shape().Slice(2);
     const int64_t num_input_channels = X->Shape()[1];
