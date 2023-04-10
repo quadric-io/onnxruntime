@@ -657,12 +657,12 @@ template struct Im2col<int8_t, StorageOrder::NHWC>;
 template struct Im2col<uint8_t, StorageOrder::NHWC>;
 template struct Im2col<MLFloat16, StorageOrder::NHWC>;
 
-template <>
-void Col2im<float, CPUMathUtil, StorageOrder::NCHW>(const float* data_col, int64_t channels, int64_t height,
+template <typename T, class Provider, int order>
+void Col2imNCHW(const T* data_col, int64_t channels, int64_t height,
                                                     int64_t width, int64_t kernel_h, int64_t kernel_w,
                                                     int64_t dilation_h, int64_t dilation_w, int64_t pad_t,
                                                     int64_t pad_l, int64_t pad_b, int64_t pad_r, int64_t stride_h,
-                                                    int64_t stride_w, float* data_im, CPUMathUtil* context) {
+                                                    int64_t stride_w, T* data_im, Provider* context) {
   const int64_t output_h =
       (height + pad_b + pad_t - (dilation_h * (kernel_h - 1) + 1)) / stride_h + 1;
   const int64_t output_w =
@@ -670,7 +670,7 @@ void Col2im<float, CPUMathUtil, StorageOrder::NCHW>(const float* data_col, int64
   const int64_t output_hw = output_h * output_w;
   const int64_t hw = height * width;
   const int64_t hwc = hw * channels;
-  Set<float, CPUMathUtil>(narrow<ptrdiff_t>(hwc), 0, data_im, context);
+  Set<T, CPUMathUtil>(narrow<ptrdiff_t>(hwc), 0, data_im, context);
 
   // Fast path for zero padding and no dilation
   // From Torch, modified THNN_(unfolded_acc)
@@ -746,6 +746,32 @@ void Col2im<float, CPUMathUtil, StorageOrder::NCHW>(const float* data_col, int64
       }
     }
   }
+}
+
+template <>
+void Col2im<float, CPUMathUtil, StorageOrder::NCHW>(const float* data_col, int64_t channels, int64_t height,
+                                                    int64_t width, int64_t kernel_h, int64_t kernel_w,
+                                                    int64_t dilation_h, int64_t dilation_w, int64_t pad_t,
+                                                    int64_t pad_l, int64_t pad_b, int64_t pad_r, int64_t stride_h,
+                                                    int64_t stride_w, float* data_im, CPUMathUtil* context) {
+  Col2imNCHW<float, CPUMathUtil, StorageOrder::NCHW>(data_col, channels, height,
+                                                 width, kernel_h, kernel_w,
+                                                 dilation_h, dilation_w, pad_t,
+                                                 pad_l, pad_b, pad_r, stride_h,
+                                                 stride_w, data_im, context);
+}
+
+template <>
+void Col2im<int32_t, CPUMathUtil, StorageOrder::NCHW>(const int32_t* data_col, int64_t channels, int64_t height,
+                                                      int64_t width, int64_t kernel_h, int64_t kernel_w,
+                                                      int64_t dilation_h, int64_t dilation_w, int64_t pad_t,
+                                                      int64_t pad_l, int64_t pad_b, int64_t pad_r, int64_t stride_h,
+                                                      int64_t stride_w, int32_t* data_im, CPUMathUtil* context) {
+  Col2imNCHW<int32_t, CPUMathUtil, StorageOrder::NCHW>(data_col, channels, height,
+                                                   width, kernel_h, kernel_w,
+                                                   dilation_h, dilation_w, pad_t,
+                                                   pad_l, pad_b, pad_r, stride_h,
+                                                   stride_w, data_im, context);
 }
 
 template <>
