@@ -3,6 +3,7 @@
 
 # -*- coding: UTF-8 -*-
 import argparse
+import copy
 import logging
 
 import numpy as np
@@ -209,6 +210,8 @@ class SymbolicShapeInference:
             "BiasSplitGelu": self._infer_BiasSplitGelu,
             "BiasAdd": self._infer_BiasAdd,
             "NhwcConv": self._infer_NhwcConv,
+            "QLinearConcat": self._infer_QLinearConcat,
+            "QLinearAdd": self._infer_QLinearAdd,
         }
         self.aten_op_dispatcher_ = {
             "embedding": self._infer_Gather,
@@ -894,7 +897,24 @@ class SymbolicShapeInference:
             )
         )
 
-    def _infer_ConcatFromSequence(self, node):  # noqa: N802
+    def filter_node_inputs(self, node, inp_list):
+        # Create a copy of the node, remove the additional arguments of the quantized version
+        # and call the FP32 version of the inference
+        new_node = copy.deepcopy(node)
+        for idx in range(len(new_node.input) - 1, -1, -1):
+            if idx not in inp_list:
+                del new_node.input[idx]
+        return new_node
+
+    def _infer_QLinearConcat(self, node):
+        num_prequant_inputs = (len(node.input) - 2) // 3
+        prequant_input_idx = [idx * 3 + 2 for idx in range(num_prequant_inputs)]
+        self._infer_Concat(self.filter_node_inputs(node, prequant_input_idx))
+
+    def _infer_QLinearAdd(self, node):
+        self._propagate_shape_and_type(node)
+
+    def _infer_ConcatFromSequence(self, node):
         seq_shape = self._get_shape(node, 0)
         new_axis = 1 if get_attribute(node, "new_axis") else 0
         axis = handle_negative_axis(get_attribute(node, "axis"), len(seq_shape) + new_axis)
