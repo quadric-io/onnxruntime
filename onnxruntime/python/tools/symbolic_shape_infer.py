@@ -215,6 +215,7 @@ class SymbolicShapeInference:
             "SkipSimplifiedLayerNormalization": self._infer_SkipLayerNormalization,
             "QLinearConcat": self._infer_QLinearConcat,
             "QLinearAdd": self._infer_QLinearAdd,
+            "QLinearMul": self._infer_QLinearMul,
         }
         self.aten_op_dispatcher_ = {
             "embedding": self._infer_Gather,
@@ -914,8 +915,19 @@ class SymbolicShapeInference:
         prequant_input_idx = [idx * 3 + 2 for idx in range(num_prequant_inputs)]
         self._infer_Concat(self.filter_node_inputs(node, prequant_input_idx))
 
+    def _propagate_shape_for_bcast_compute(self, node):
+        # For operators where one input can have lower dimensionality and
+        # be broadcasted, such as QLinearAdd and QLinearMul, propagate the
+        # shape of the larger tensor
+        lhs_dim, rhs_dim = [len(self.known_vi_[node.input[i]].type.tensor_type.shape.dim) for i in (0, 3)]
+        prop_idx = 0 if lhs_dim >= rhs_dim else 3
+        self._propagate_shape_and_type(node, prop_idx)
+
     def _infer_QLinearAdd(self, node):
-        self._propagate_shape_and_type(node)
+        self._propagate_shape_for_bcast_compute(node)
+
+    def _infer_QLinearMul(self, node):
+        self._propagate_shape_for_bcast_compute(node)
 
     def _infer_ConcatFromSequence(self, node):
         seq_shape = self._get_shape(node, 0)
