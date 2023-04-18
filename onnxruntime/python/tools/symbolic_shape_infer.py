@@ -209,7 +209,8 @@ class SymbolicShapeInference:
             "NhwcConv": self._infer_NhwcConv,
             "QLinearConcat": self._infer_QLinearConcat,
             "QLinearAdd": self._infer_QLinearAdd,
-            "QLinearMul": self._infer_QLinearMul
+            "QLinearMul": self._infer_QLinearMul,
+            "QLinearLeakyRelu": self._infer_QLinearLeakyRelu,
         }
         self.aten_op_dispatcher_ = {
             "embedding": self._infer_Gather,
@@ -913,6 +914,9 @@ class SymbolicShapeInference:
 
     def _infer_QLinearMul(self, node):
         self._propagate_shape_for_bcast_compute(node)
+
+    def _infer_QLinearLeakyRelu(self, node):
+        self._propagate_shape_and_type(node)
 
     def _infer_ConcatFromSequence(self, node):
         seq_shape = self._get_shape(node, 0)
