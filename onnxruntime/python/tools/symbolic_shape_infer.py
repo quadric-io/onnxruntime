@@ -213,10 +213,16 @@ class SymbolicShapeInference:
             "SimplifiedLayerNormalization": self._infer_LayerNormalization,
             "SkipLayerNormalization": self._infer_SkipLayerNormalization,
             "SkipSimplifiedLayerNormalization": self._infer_SkipLayerNormalization,
+            # QLinear ops
             "QLinearConcat": self._infer_QLinearConcat,
+            "QGemm": self._infer_QGemm,
             "QLinearAdd": self._infer_QLinearAdd,
             "QLinearMul": self._infer_QLinearMul,
-            "QLinearLeakyRelu": self._infer_QLinearLeakyRelu,
+            "QLinearLeakyRelu": self._infer_QLinearActivation,
+            "QLinearSigmoid": self._infer_QLinearActivation,
+            "QLinearSoftmax": self._infer_QLinearActivation,
+            "QLinearGlobalAveragePool": self._infer_QLinearGlobalAveragePool,
+            "QLinearAveragePool": self._infer_QLinearAveragePool,
         }
         self.aten_op_dispatcher_ = {
             "embedding": self._infer_Gather,
@@ -911,18 +917,51 @@ class SymbolicShapeInference:
                 del new_node.input[idx]
         return new_node
 
+    def _propagate_shape_for_bcast_compute(self, node):
+        # For operators where one input can have lower dimensionality and
+        # be broadcasted, such as QLinearAdd and QLinearMul, propagate the
+        # shape of the tensor with more non-trivial dimensions
+
+        lhs_sh, rhs_sh = [self.known_vi_[node.input[i]].type.tensor_type.shape for i in (0, 3)]
+        lhs_dim, rhs_dim = [len([s for s in input_shape.dim if s.dim_value != 1]) for input_shape in (lhs_sh, rhs_sh)]
+        prop_idx = 0 if lhs_dim >= rhs_dim else 3
+        self._propagate_shape_and_type(node, prop_idx)
+
     def _infer_QLinearConcat(self, node):
         num_prequant_inputs = (len(node.input) - 2) // 3
         prequant_input_idx = [idx * 3 + 2 for idx in range(num_prequant_inputs)]
         self._infer_Concat(self.filter_node_inputs(node, prequant_input_idx))
 
-    def _propagate_shape_for_bcast_compute(self, node):
-        # For operators where one input can have lower dimensionality and
-        # be broadcasted, such as QLinearAdd and QLinearMul, propagate the
-        # shape of the larger tensor
-        lhs_dim, rhs_dim = [len(self.known_vi_[node.input[i]].type.tensor_type.shape.dim) for i in (0, 3)]
-        prop_idx = 0 if lhs_dim >= rhs_dim else 3
-        self._propagate_shape_and_type(node, prop_idx)
+    def _infer_QLinearGlobalAveragePool(self, node):
+        # For operations that do not have shape relations defined for
+        # the unquantized version in the dispatcher fall back to the
+        # ONNX shape inference
+        prequant_input_idx = [0]
+        new_node = self.filter_node_inputs(node, prequant_input_idx)
+        new_node.op_type = new_node.op_type.replace("QLinear", "")
+        new_node.domain = ""
+        self._onnx_infer_single_node(new_node)
+
+    def _infer_QLinearAveragePool(self, node):
+        # For operations that do not have shape relations defined for
+        # the unquantized version in the dispatcher fall back to the
+        # ONNX shape inference
+        prequant_input_idx = [0]
+        new_node = self.filter_node_inputs(node, prequant_input_idx)
+        new_node.op_type = new_node.op_type.replace("QLinear", "")
+        new_node.domain = ""
+        self._onnx_infer_single_node(new_node)
+        self._infer_Pool(new_node)
+
+    def _infer_QGemm(self, node):
+        # For operations that do not have shape relations defined for
+        # the unquantized version in the dispatcher fall back to the
+        # ONNX shape inference
+        prequant_input_idx = [0, 3]
+        new_node = self.filter_node_inputs(node, prequant_input_idx)
+        new_node.op_type = new_node.op_type.replace("Q", "")
+        new_node.domain = ""
+        self._onnx_infer_single_node(new_node)
 
     def _infer_QLinearAdd(self, node):
         self._propagate_shape_for_bcast_compute(node)
@@ -930,7 +969,7 @@ class SymbolicShapeInference:
     def _infer_QLinearMul(self, node):
         self._propagate_shape_for_bcast_compute(node)
 
-    def _infer_QLinearLeakyRelu(self, node):
+    def _infer_QLinearActivation(self, node):
         self._propagate_shape_and_type(node)
 
     def _infer_ConcatFromSequence(self, node):
