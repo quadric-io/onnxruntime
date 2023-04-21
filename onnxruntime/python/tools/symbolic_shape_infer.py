@@ -214,15 +214,15 @@ class SymbolicShapeInference:
             "SkipLayerNormalization": self._infer_SkipLayerNormalization,
             "SkipSimplifiedLayerNormalization": self._infer_SkipLayerNormalization,
             # QLinear ops
-            "QLinearConcat": self._infer_QLinearConcat,
-            "QGemm": self._infer_QGemm,
-            "QLinearAdd": self._infer_QLinearAdd,
-            "QLinearMul": self._infer_QLinearMul,
-            "QLinearLeakyRelu": self._infer_QLinearActivation,
-            "QLinearSigmoid": self._infer_QLinearActivation,
-            "QLinearSoftmax": self._infer_QLinearActivation,
-            "QLinearGlobalAveragePool": self._infer_QLinearGlobalAveragePool,
-            "QLinearAveragePool": self._infer_QLinearAveragePool,
+            "QLinearConcat": self._infer_qlinear_concat,
+            "QGemm": self._infer_qgemm,
+            "QLinearAdd": self._infer_qlinear_add,
+            "QLinearMul": self._infer_qlinear_mul,
+            "QLinearLeakyRelu": self._infer_qlinear_activation,
+            "QLinearSigmoid": self._infer_qlinear_activation,
+            "QLinearSoftmax": self._infer_qlinear_activation,
+            "QLinearGlobalAveragePool": self._infer_qlinear_global_average_pool,
+            "QLinearAveragePool": self._infer_qlinear_average_pool,
         }
         self.aten_op_dispatcher_ = {
             "embedding": self._infer_Gather,
@@ -927,50 +927,49 @@ class SymbolicShapeInference:
         prop_idx = 0 if lhs_dim >= rhs_dim else 3
         self._propagate_shape_and_type(node, prop_idx)
 
-    def _infer_QLinearConcat(self, node):
+    def _qlinear_onnx_shape_infer(self, node, prequant_input_idx):
+        # Remove the quantization specific input and
+        # change the node type to match the unquantized
+        # node, then use ONNX to infer the output type
+        new_node = self.filter_node_inputs(node, prequant_input_idx)
+        new_node.op_type = new_node.op_type.replace("QLinear", "")
+        new_node.domain = ""
+        self._onnx_infer_single_node(new_node)
+
+    def _infer_qlinear_concat(self, node):
         num_prequant_inputs = (len(node.input) - 2) // 3
         prequant_input_idx = [idx * 3 + 2 for idx in range(num_prequant_inputs)]
-        self._infer_Concat(self.filter_node_inputs(node, prequant_input_idx))
+        self._qlinear_onnx_shape_infer(node, prequant_input_idx)
+        # self._infer_Concat(self.filter_node_inputs(node, prequant_input_idx))
 
-    def _infer_QLinearGlobalAveragePool(self, node):
-        # For operations that do not have shape relations defined for
-        # the unquantized version in the dispatcher fall back to the
-        # ONNX shape inference
+    def _infer_qlinear_global_average_pool(self, node):
         prequant_input_idx = [0]
-        new_node = self.filter_node_inputs(node, prequant_input_idx)
-        new_node.op_type = new_node.op_type.replace("QLinear", "")
-        new_node.domain = ""
-        self._onnx_infer_single_node(new_node)
+        self._qlinear_onnx_shape_infer(node, prequant_input_idx)
 
-    def _infer_QLinearAveragePool(self, node):
-        # For operations that do not have shape relations defined for
-        # the unquantized version in the dispatcher fall back to the
-        # ONNX shape inference
+    def _infer_qlinear_average_pool(self, node):
         prequant_input_idx = [0]
-        new_node = self.filter_node_inputs(node, prequant_input_idx)
-        new_node.op_type = new_node.op_type.replace("QLinear", "")
-        new_node.domain = ""
-        self._onnx_infer_single_node(new_node)
-        self._infer_Pool(new_node)
+        self._qlinear_onnx_shape_infer(node, prequant_input_idx)
 
-    def _infer_QGemm(self, node):
-        # For operations that do not have shape relations defined for
-        # the unquantized version in the dispatcher fall back to the
-        # ONNX shape inference
+    def _infer_qgemm(self, node):
+        # QGemm has a different naming convention compared to the rest of the
+        # QLinearOps, treat it separately
         prequant_input_idx = [0, 3]
         new_node = self.filter_node_inputs(node, prequant_input_idx)
         new_node.op_type = new_node.op_type.replace("Q", "")
         new_node.domain = ""
         self._onnx_infer_single_node(new_node)
 
-    def _infer_QLinearAdd(self, node):
-        self._propagate_shape_for_bcast_compute(node)
+    def _infer_qlinear_add(self, node):
+        prequant_input_idx = [0, 3]
+        self._qlinear_onnx_shape_infer(node, prequant_input_idx)
 
-    def _infer_QLinearMul(self, node):
-        self._propagate_shape_for_bcast_compute(node)
+    def _infer_qlinear_mul(self, node):
+        prequant_input_idx = [0, 3]
+        self._qlinear_onnx_shape_infer(node, prequant_input_idx)
 
-    def _infer_QLinearActivation(self, node):
-        self._propagate_shape_and_type(node)
+    def _infer_qlinear_activation(self, node):
+        prequant_input_idx = [0]
+        self._qlinear_onnx_shape_infer(node, prequant_input_idx)
 
     def _infer_ConcatFromSequence(self, node):
         seq_shape = self._get_shape(node, 0)
