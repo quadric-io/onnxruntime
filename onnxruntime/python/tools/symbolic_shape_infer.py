@@ -904,7 +904,7 @@ class SymbolicShapeInference:
         # be broadcasted, such as QLinearAdd and QLinearMul, propagate the
         # shape of the tensor with more non-trivial dimensions
 
-        lhs_sh, rhs_sh = [self.known_vi_[node.input[i]].type.tensor_type.shape for i in (0,3)]
+        lhs_sh, rhs_sh = [self.known_vi_[node.input[i]].type.tensor_type.shape for i in (0, 3)]
         lhs_dim, rhs_dim = [len([s for s in input_shape.dim if s.dim_value != 1]) for input_shape in (lhs_sh, rhs_sh)]
         prop_idx = 0 if lhs_dim >= rhs_dim else 3
         self._propagate_shape_and_type(node, prop_idx)
@@ -914,8 +914,8 @@ class SymbolicShapeInference:
         # change the node type to match the unquantized
         # node, then use ONNX to infer the output type
         new_node = self.filter_node_inputs(node, prequant_input_idx)
-        new_node.op_type = new_node.op_type.replace('QLinear', '')
-        new_node.domain = ''
+        new_node.op_type = new_node.op_type.replace("QLinear", "")
+        new_node.domain = ""
         self._onnx_infer_single_node(new_node)
 
     def _infer_qlinear_concat(self, node):
@@ -937,8 +937,8 @@ class SymbolicShapeInference:
         # QLinearOps, treat it separately
         prequant_input_idx = [0, 3]
         new_node = self.filter_node_inputs(node, prequant_input_idx)
-        new_node.op_type = new_node.op_type.replace('Q', '')
-        new_node.domain = ''
+        new_node.op_type = new_node.op_type.replace("Q", "")
+        new_node.domain = ""
         self._onnx_infer_single_node(new_node)
 
     def _infer_qlinear_add(self, node):
