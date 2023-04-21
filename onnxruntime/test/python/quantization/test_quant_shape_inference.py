@@ -8,13 +8,10 @@
 
 import tempfile
 import unittest
-from pathlib import Path
 
 import numpy as np
-import onnx
 from onnx import TensorProto, helper, numpy_helper
 
-import onnxruntime
 from onnxruntime.tools import symbolic_shape_infer
 
 
@@ -72,7 +69,7 @@ class TestQLinearOpsShapeInfer(unittest.TestCase):
                     numpy_helper.from_array(np.array(0.007874015718698502, dtype='float32'), name='input.1_scale'),
                     numpy_helper.from_array(np.array(0.007874015718698502, dtype='float32'), name='add_bias_scale'),
                     numpy_helper.from_array(np.array(0, dtype='int8'), name='add_bias_zero_point'),
-                    numpy_helper.from_array(np.ones([8]).astype('int8'), name='add_bias_quantized'),
+                    numpy_helper.from_array(np.ones([8,1,1]).astype('int8'), name='add_bias_quantized'),
                     numpy_helper.from_array(np.array(0, dtype='int8'), name='mul_out_zero_point'),
                     numpy_helper.from_array(np.array(0.007874015718698502, dtype='float32'), name='mul_out_scale'),
                     numpy_helper.from_array(np.array(0, dtype='int8'), name='concat_out_zero_point'),
@@ -98,16 +95,6 @@ class TestQLinearOpsShapeInfer(unittest.TestCase):
                     numpy_helper.from_array(np.ones([32]).astype('int32'), name='dense_bias_quantized'),
                 ],
                 value_info=[
-                    helper.make_tensor_value_info('add_out', TensorProto.FLOAT, shape=[1, 8, 14, 14]),
-                    helper.make_tensor_value_info('mul_out', TensorProto.FLOAT, shape=[1, 8, 14, 14]),
-                    helper.make_tensor_value_info('concat_out', TensorProto.FLOAT, shape=[1, 16, 14, 14]),
-                    helper.make_tensor_value_info('relu_out', TensorProto.FLOAT, shape=[1, 16, 14, 14]),
-                    helper.make_tensor_value_info('pool_out', TensorProto.FLOAT, shape=[1, 16, 7, 7]),
-                    helper.make_tensor_value_info('sigmoid_out', TensorProto.FLOAT, shape=[1, 16, 7, 7]),
-                    helper.make_tensor_value_info('add_out_2', TensorProto.FLOAT, shape=[1, 16, 7, 7]),
-                    helper.make_tensor_value_info('gap_out', TensorProto.FLOAT, shape=[1, 16, 1, 1]),
-                    helper.make_tensor_value_info('flatten_out', TensorProto.FLOAT, shape=[1, 16]),
-                    helper.make_tensor_value_info('dense_out', TensorProto.FLOAT, shape=[1, 32]),
                 ],
                 nodes=[
                     make_node('QuantizeLinear', inputs=['input.1', 'input.1_scale', 'input.1_zero_point'], outputs=['input.1_quantized'], name='input.1_QuantizeLinear'),
