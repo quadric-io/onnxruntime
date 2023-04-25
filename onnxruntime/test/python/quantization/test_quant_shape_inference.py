@@ -78,11 +78,10 @@ class TestQLinearOpsShapeInfer(unittest.TestCase):
                 numpy_helper.from_array(np.array(0.007874015718698502, dtype="float32"), name="add_out_scale"),
                 numpy_helper.from_array(np.array(0, dtype="int8"), name="add_out_zero_point"),
             ]
-
         )
         self.assertEqual(self.infer_out_shape(model),
                          [1, 8, 14, 14],
-                         "Wrong shape infered for quantized network output")
+                         "Wrong shape inferred for quantized network output")
 
     def test_shape_qlinear_mult(self):
         model = self.get_model(
@@ -114,7 +113,7 @@ class TestQLinearOpsShapeInfer(unittest.TestCase):
         )
         self.assertEqual(self.infer_out_shape(model),
                          [1, 8, 14, 14],
-                         "Wrong shape infered for quantized network output")
+                         "Wrong shape inferred for quantized network output")
 
     def test_shape_qlinear_concat(self):
         model = self.get_model(
@@ -148,7 +147,7 @@ class TestQLinearOpsShapeInfer(unittest.TestCase):
         )
         self.assertEqual(self.infer_out_shape(model),
                          [1, 16, 14, 14],
-                         "Wrong shape infered for quantized network output")
+                         "Wrong shape inferred for quantized network output")
 
     def test_shape_qlinear_leaky_relu(self):
         model = self.get_model(
@@ -176,7 +175,7 @@ class TestQLinearOpsShapeInfer(unittest.TestCase):
         )
         self.assertEqual(self.infer_out_shape(model),
                          [1, 16, 14, 14],
-                         "Wrong shape infered for quantized network output")
+                         "Wrong shape inferred for quantized network output")
 
     def test_shape_qlinear_average_pool(self):
         model = self.get_model(
@@ -205,7 +204,7 @@ class TestQLinearOpsShapeInfer(unittest.TestCase):
         )
         self.assertEqual(self.infer_out_shape(model),
                          [1, 16, 7, 7],
-                         "Wrong shape infered for quantized network output")
+                         "Wrong shape inferred for quantized network output")
 
     def test_shape_qlinear_sigmoid(self):
         model = self.get_model(
@@ -232,7 +231,7 @@ class TestQLinearOpsShapeInfer(unittest.TestCase):
         )
         self.assertEqual(self.infer_out_shape(model),
                          [1, 16, 7, 7],
-                         "Wrong shape infered for quantized network output")
+                         "Wrong shape inferred for quantized network output")
 
     def test_shape_qlinear_global_average_pool(self):
         model = self.get_model(
@@ -260,7 +259,7 @@ class TestQLinearOpsShapeInfer(unittest.TestCase):
         )
         self.assertEqual(self.infer_out_shape(model),
                          [1, 16, 1, 1],
-                         "Wrong shape infered for quantized network output")
+                         "Wrong shape inferred for quantized network output")
 
     def test_shape_qlinear_gemm(self):
         model = self.get_model(
@@ -297,7 +296,7 @@ class TestQLinearOpsShapeInfer(unittest.TestCase):
         )
         self.assertEqual(self.infer_out_shape(model),
                          [1, 32],
-                         "Wrong shape infered for quantized network output")
+                         "Wrong shape inferred for quantized network output")
 
     def test_shape_qlinear_softmax(self):
         model = self.get_model(
@@ -324,7 +323,8 @@ class TestQLinearOpsShapeInfer(unittest.TestCase):
         )
         self.assertEqual(self.infer_out_shape(model),
                          [1, 32],
-                         "Wrong shape infered for quantized network output")
+                         "Wrong shape inferred for quantized network output")
+
 
 if __name__ == "__main__":
     unittest.main()
