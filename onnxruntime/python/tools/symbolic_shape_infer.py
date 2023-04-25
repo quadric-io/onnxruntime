@@ -216,13 +216,13 @@ class SymbolicShapeInference:
             # QLinear ops
             "QLinearConcat": self._infer_qlinear_concat,
             "QGemm": self._infer_qgemm,
-            "QLinearAdd": self._infer_qlinear_add,
-            "QLinearMul": self._infer_qlinear_mul,
-            "QLinearLeakyRelu": self._infer_qlinear_activation,
-            "QLinearSigmoid": self._infer_qlinear_activation,
-            "QLinearSoftmax": self._infer_qlinear_activation,
-            "QLinearGlobalAveragePool": self._infer_qlinear_global_average_pool,
-            "QLinearAveragePool": self._infer_qlinear_average_pool,
+            "QLinearAdd": self._infer_qlinear_binary_op,
+            "QLinearMul": self._infer_qlinear_binary_op,
+            "QLinearLeakyRelu": self._infer_qlinear_unary_op,
+            "QLinearSigmoid": self._infer_qlinear_unary_op,
+            "QLinearSoftmax": self._infer_qlinear_unary_op,
+            "QLinearGlobalAveragePool": self._infer_qlinear_unary_op,
+            "QLinearAveragePool": self._infer_qlinear_unary_op,
         }
         self.aten_op_dispatcher_ = {
             "embedding": self._infer_Gather,
@@ -908,7 +908,7 @@ class SymbolicShapeInference:
             )
         )
 
-    def filter_node_inputs(self, node, inp_list):
+    def _filter_node_inputs(self, node, inp_list):
         # Create a copy of the node, remove the additional arguments of the quantized version
         # and call the FP32 version of the inference
         new_node = copy.deepcopy(node)
@@ -917,59 +917,53 @@ class SymbolicShapeInference:
                 del new_node.input[idx]
         return new_node
 
-    def _propagate_shape_for_bcast_compute(self, node):
-        # For operators where one input can have lower dimensionality and
-        # be broadcasted, such as QLinearAdd and QLinearMul, propagate the
-        # shape of the tensor with more non-trivial dimensions
-
-        lhs_sh, rhs_sh = [self.known_vi_[node.input[i]].type.tensor_type.shape for i in (0, 3)]
-        lhs_dim, rhs_dim = [len([s for s in input_shape.dim if s.dim_value != 1]) for input_shape in (lhs_sh, rhs_sh)]
-        prop_idx = 0 if lhs_dim >= rhs_dim else 3
-        self._propagate_shape_and_type(node, prop_idx)
-
     def _qlinear_onnx_shape_infer(self, node, prequant_input_idx):
         # Remove the quantization specific input and
         # change the node type to match the unquantized
         # node, then use ONNX to infer the output type
-        new_node = self.filter_node_inputs(node, prequant_input_idx)
+        new_node = self._filter_node_inputs(node, prequant_input_idx)
         new_node.op_type = new_node.op_type.replace("QLinear", "")
         new_node.domain = ""
         self._onnx_infer_single_node(new_node)
 
+    def _infer_qlinear_unary_op(self, node):
+        # For qlinear unary operators the input order is
+        # [inp, inp_scale, inp_zp, out_scale, out_zp] and
+        # we want to preserve [inp] for shape inference
+        # https://github.com/quadric-io/onnxruntime/blob/main/docs/ContribOperators.md#com.microsoft.QLinearSigmoid
+        prequant_input_idx = [0]
+        self._qlinear_onnx_shape_infer(node, prequant_input_idx)
+
+    def _infer_qlinear_binary_op(self, node):
+        # For qlinear binary operators the input order is
+        # [inp_0, inp_0_scale, inp_0_zp, inp_1, inp_1_scale, inp_1_zp, out_scale, out_zp]
+        # and we want to preserve [inp_0, inp_1]
+        # https://github.com/quadric-io/onnxruntime/blob/main/docs/ContribOperators.md#com.microsoft.QLinearAdd
+        prequant_input_idx = [0, 3]
+        self._qlinear_onnx_shape_infer(node, prequant_input_idx)
+
     def _infer_qlinear_concat(self, node):
+        # The inputs for QLinearConcat are in the format
+        # [y_scale, y_zp, inp_0, inp_0_scale, inp_0_zp, inp_1, inp_1_sc...]
+        # https://github.com/quadric-io/onnxruntime/blob/main/docs/ContribOperators.md#com.microsoft.QLinearConcat
+        # After removing the quantization params we should be left with
+        # [inp_0, inp_1, ...]
         num_prequant_inputs = (len(node.input) - 2) // 3
         prequant_input_idx = [idx * 3 + 2 for idx in range(num_prequant_inputs)]
-        self._qlinear_onnx_shape_infer(node, prequant_input_idx)
-        # self._infer_Concat(self.filter_node_inputs(node, prequant_input_idx))
-
-    def _infer_qlinear_global_average_pool(self, node):
-        prequant_input_idx = [0]
-        self._qlinear_onnx_shape_infer(node, prequant_input_idx)
-
-    def _infer_qlinear_average_pool(self, node):
-        prequant_input_idx = [0]
         self._qlinear_onnx_shape_infer(node, prequant_input_idx)
 
     def _infer_qgemm(self, node):
         # QGemm has a different naming convention compared to the rest of the
-        # QLinearOps, treat it separately
+        # QLinearOps, treat it separately.
+        # The inputs for QLinearConcat are in the format
+        # [A, a_scale, a_zp, B, b_scale, b_zp, c, y_scale, y_zp]
+        # https://github.com/quadric-io/onnxruntime/blob/main/docs/ContribOperators.md#com.microsoft.QGemm
+        # After removing the quantization params we should be left with [A, B]
         prequant_input_idx = [0, 3]
-        new_node = self.filter_node_inputs(node, prequant_input_idx)
-        new_node.op_type = new_node.op_type.replace("Q", "")
+        new_node = self._filter_node_inputs(node, prequant_input_idx)
+        new_node.op_type = "Gemm"
         new_node.domain = ""
         self._onnx_infer_single_node(new_node)
-
-    def _infer_qlinear_add(self, node):
-        prequant_input_idx = [0, 3]
-        self._qlinear_onnx_shape_infer(node, prequant_input_idx)
-
-    def _infer_qlinear_mul(self, node):
-        prequant_input_idx = [0, 3]
-        self._qlinear_onnx_shape_infer(node, prequant_input_idx)
-
-    def _infer_qlinear_activation(self, node):
-        prequant_input_idx = [0]
-        self._qlinear_onnx_shape_infer(node, prequant_input_idx)
 
     def _infer_ConcatFromSequence(self, node):
         seq_shape = self._get_shape(node, 0)
