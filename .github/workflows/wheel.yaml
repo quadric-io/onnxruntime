@@ -1,0 +1,43 @@
+name: Release & Upload Wheel
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - shayan-create-wheel-release
+
+jobs:
+  build_and_upload_wheel:
+    runs-on: linux-mk
+    container:
+      image: ghcr.io/quadric-io/tvm:devel
+      options: "--mount type=bind,source=${{ github.workspace }},target=/workspace"
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+    - name: Build ONNX Runtime wheel
+      working-directory: /workspace
+      run: |
+        python3 -m pip install cmake --upgrade
+        ./build.sh --build_wheel --config Release --parallel --skip_tests --skip_submodule_sync
+        wheel_path=$(find . -name '*.whl' | xargs readlink -f)
+        echo "wheel_path=$wheel_path" >> $GITHUB_ENV
+    - name: Count releases
+      id: count_releases
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        apt-get update && apt-get install curl jq -y
+        count=$(curl --request GET \
+          --url https://api.github.com/repos/${{ github.repository }}/releases \
+          --header "Authorization: Bearer $GITHUB_TOKEN" | jq length)
+        echo "count=$count" >> $GITHUB_ENV
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v${{ env.count }}
+        name: Release v${{ env.count }}
+        files: ${{ env.wheel_path }}
