@@ -12,7 +12,8 @@ from .onnx_quantizer import ONNXQuantizer
 from .qdq_quantizer import QDQQuantizer
 from .quant_utils import QuantFormat, QuantizationMode, QuantType, load_model, model_has_pre_process_metadata
 from .registry import IntegerOpsRegistry, QDQRegistry, QLinearOpsRegistry
-
+import json
+import os
 
 class QuantConfig:
     def __init__(
@@ -373,6 +374,13 @@ def quantize_static(
         )
         calibrator.collect_data(calibration_data_reader)
         tensors_range = calibrator.compute_range()
+
+        # Write out the tensor ranges in the same place as output model file
+        # will be created with a .tranges extension
+        tensors_range_file = os.path.splitext(model_output)[0] + ".tranges"
+        with open(tensors_range_file, "w", encoding='utf8') as f:
+            json.dump(tensors_range, f, indent=4)
+
         del calibrator
 
     check_static_quant_arguments(quant_format, activation_type, weight_type)
