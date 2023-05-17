@@ -217,6 +217,9 @@ class SymbolicShapeInference:
             "QLinearSoftmax": self._infer_qlinear_unary_op,
             "QLinearGlobalAveragePool": self._infer_qlinear_unary_op,
             "QLinearAveragePool": self._infer_qlinear_unary_op,
+            # Quadric custom operators
+            "QuadricCustomOp": self._infer_custom_op,
+            "QuadricCustomOpElementWise": self._infer_custom_op
         }
         self.aten_op_dispatcher_ = {
             "embedding": self._infer_Gather,
@@ -946,6 +949,21 @@ class SymbolicShapeInference:
         new_node.op_type = "Gemm"
         new_node.domain = ""
         self._onnx_infer_single_node(new_node)
+
+    def _infer_custom_op(self, node):
+        # For the CCL custom operators the shape and dtype of the output are present in
+        # the attributes and can be used to directly create the value info
+        attr_map = {n.name:n for n in list(node.attribute)}
+        assert "shape" in attr_map and "elem_type" in attr_map,\
+            "Custom op output type not found"
+        vi = self.known_vi_[node.output[0]]
+        vi.CopyFrom(
+            helper.make_tensor_value_info(
+                    node.output[0],
+                    attr_map["elem_type"].i,
+                    attr_map["shape"].ints,
+                )
+            )
 
     def _infer_ConcatFromSequence(self, node):
         seq_shape = self._get_shape(node, 0)
