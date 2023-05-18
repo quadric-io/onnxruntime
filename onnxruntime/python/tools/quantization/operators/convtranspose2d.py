@@ -98,9 +98,7 @@ class QLinearConvTranspose(QuantOperatorBase):
         if node.output[0] in self.quantizer.value_infos:
             op_shape = self.quantizer.value_infos[node.output[0]].type.tensor_type.shape.dim
             op_shape = [it.dim_value for it in op_shape]
-            self.quantizer.model.graph().value_info.extend(
-                [onnx.helper.make_tensor_value_info(qlinear_conv_node.output[0], onnx.TensorProto.INT8, shape=op_shape)]
-            )
+            self.quantizer.model.graph().value_info.extend([onnx.helper.make_tensor_value_info(qlinear_conv_node.output[0], onnx.TensorProto.INT8, shape=op_shape)])
 
         nodes.append(qlinear_conv_node)
 
