@@ -216,6 +216,7 @@ class SymbolicShapeInference:
             "QLinearAdd": self._infer_qlinear_binary_op,
             "QLinearMul": self._infer_qlinear_binary_op,
             "QLinearLeakyRelu": self._infer_qlinear_unary_op,
+            "QLinearConvTranspose": self._infer_qlinear_binary_op,
             "QLinearSigmoid": self._infer_qlinear_unary_op,
             "QLinearSoftmax": self._infer_qlinear_unary_op,
             "QLinearGlobalAveragePool": self._infer_qlinear_unary_op,
