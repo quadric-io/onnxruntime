@@ -325,6 +325,46 @@ class TestQLinearOpsShapeInfer(unittest.TestCase):
                          [1, 32],
                          "Wrong shape inferred for quantized network output")
 
+    def test_shape_qlinear_conv_transpose(self):
+        model = self.get_model(
+            helper.make_node(
+                "QLinearConvTranspose",
+                inputs=[
+                    "input",
+                    "input_scale",
+                    "input_zero_point",
+                    "conv_transpose_wt_quantized",
+                    "weight_scale",
+                    "weight_zero_point",
+                    "conv_transpose_out_scale",
+                    "conv_transpose_out_zero_point",
+                    "conv_transpose_bias"
+                ],
+                outputs=["output"],
+                name="quant_node",
+                domain="com.microsoft",
+                auto_pad=b'NOTSET',
+                dilations=[1, 1],
+                group=1,
+                kernel_shape=[2, 2],
+                pads=[0, 0, 0, 0],
+                strides=[2, 2]
+            ),
+            [1, 32, 14, 14],
+            [
+                numpy_helper.from_array(np.array(0.007874015718698502, dtype="float32"), name="input_scale"),
+                numpy_helper.from_array(np.array(0, dtype="int8"), name="input_zero_point"),
+                numpy_helper.from_array(np.ones([32, 64, 2, 2]).astype("int8"), name="conv_transpose_wt_quantized"),
+                numpy_helper.from_array(np.array(0.007874015718698502, dtype="float32"), name="weight_scale"),
+                numpy_helper.from_array(np.array(0, dtype="int8"), name="weight_zero_point"),
+                numpy_helper.from_array(np.array(0.007874015718698502, dtype="float32"), name="conv_transpose_out_scale"),
+                numpy_helper.from_array(np.array(0, dtype="int8"), name="conv_transpose_out_zero_point"),
+                numpy_helper.from_array(np.ones([64]).astype("int32"), name="conv_transpose_bias"),
+            ]
+        )
+        self.assertEqual(self.infer_out_shape(model),
+                         [1, 64, 28, 28],
+                         "Wrong shape inferred for quantized network output")
 
 if __name__ == "__main__":
     unittest.main()
