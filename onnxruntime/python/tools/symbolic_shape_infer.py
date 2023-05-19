@@ -942,6 +942,8 @@ class SymbolicShapeInference:
         # For qlinear binary operators the input order is
         # [inp_0, inp_0_scale, inp_0_zp, inp_1, inp_1_scale, inp_1_zp, out_scale, out_zp]
         # and we want to preserve [inp_0, inp_1]
+        # This also applies to operators where the shape is determined by the input and weight shapes, such as
+        # QLinearConv and QLinearConvTranspose
         # https://github.com/quadric-io/onnxruntime/blob/main/docs/ContribOperators.md#com.microsoft.QLinearAdd
         prequant_input_idx = [0, 3]
         self._qlinear_onnx_shape_infer(node, prequant_input_idx)
