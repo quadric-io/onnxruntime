@@ -1,11 +1,13 @@
-name: Release & Upload Wheel
+name: CI && Release & Upload Wheel
 
 on:
   workflow_dispatch:
   push:
     branches:
       - main
-      - shayan-create-wheel-release
+  pull_request:
+    branches:
+      - main
 
 jobs:
   build_and_upload_wheel:
@@ -20,11 +22,12 @@ jobs:
       working-directory: /workspace
       run: |
         python3 -m pip install cmake --upgrade
-        ./build.sh --build_wheel --config Release --parallel --skip_tests --skip_submodule_sync
+        ./build.sh --build_wheel --config Release --parallel ${{ github.event_name == 'pull_request' && ' ' || '--skip_tests'}} --skip_submodule_sync
         wheel_path=$(find . -name '*.whl' | xargs readlink -f)
         echo "wheel_path=$wheel_path" >> $GITHUB_ENV
     - name: Count releases
       id: count_releases
+      if: github.event_name != 'pull_request'
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
@@ -34,6 +37,7 @@ jobs:
           --header "Authorization: Bearer $GITHUB_TOKEN" | jq length)
         echo "count=$count" >> $GITHUB_ENV
     - name: Create Release
+      if: github.event_name != 'pull_request'
       uses: softprops/action-gh-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
