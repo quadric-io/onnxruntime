@@ -5082,8 +5082,8 @@ node-releases@^2.0.3:
   integrity sha512-U9h1NLROZTq9uE1SNffn6WuPDg8icmi3ns4rEl/oTfIle4iLjTliCzgTsbaIFMq/Xn078/lfY/BL0GWZ+psK4Q==
 
 node-stream-zip@^1.9.1:
-  version "1.15.1"
-  resolved "https://registry.yarnpkg.com/node-stream-zip/-/node-stream-zip-1.15.1.tgz#158adb88ed8004c6c49a396b50a6a5de3bca33ea"
+  version "1.15.0"
+  resolved "https://registry.yarnpkg.com/node-stream-zip/-/node-stream-zip-1.15.0.tgz#158adb88ed8004c6c49a396b50a6a5de3bca33ea"
   integrity sha512-LN4fydt9TqhZhThkZIVQnF9cwjU3qmUH9h78Mx/K7d3VvfRqqwthLwJEUOEL0QPZ0XQmNN7be5Ggit5+4dq3Bw==
 
 normalize-path@^3.0.0:
