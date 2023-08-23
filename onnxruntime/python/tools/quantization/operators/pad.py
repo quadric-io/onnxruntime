@@ -56,8 +56,6 @@ class QPad(QuantOperatorBase):
                         quantized_padding_constant_array,
                         quantized_padding_constant_name,
                     )
-                    # Suppose this padding constant initializer only used by the node
-                    self.quantizer.model.remove_initializer(padding_constant_initializer)
                     self.quantizer.model.add_initializer(quantized_padding_constant_initializer)
                     node.input[2] = quantized_padding_constant_name
                 else:
