@@ -2913,6 +2913,25 @@ This op functions in much the same was as Dropout-11 and Dropout-13 do, execpt t
                       "Allow inputs and outputs to be any kind of tensor.");
 #endif
 
+  ONNX_CONTRIB_OPERATOR_SCHEMA(QuadricCustomOp)
+      .SetDomain(kQuadricDomain)
+      .SinceVersion(1)
+      .SetSupportLevel(OpSchema::SupportType::EXPERIMENTAL)
+      .SetDoc("QuadricCustomOp")
+      .Input(0, "inputs", "QuadricCustomOp inputs.", "T", OpSchema::Variadic,
+             /*is_homogeneous*/ false,
+             /*min_arity*/ 1)
+      .Output(0, "outputs", "QuadricCustomOp outputs.", "T", OpSchema::Variadic,
+              /*is_homogeneous*/ false,
+              /*min_arity*/ 1)
+      .AllowUncheckedAttributes()
+      .Attr("ccl_func_name", "Name of CCL function.", AttributeProto::STRING)
+      .Attr("sub_graph", "Replaced sub-graph.", AttributeProto::GRAPH)
+      .Attr("element_wise", "True (1) if only element-wise ops, False (0) otherwise", AttributeProto::INT, true)
+      .TypeConstraint("T", OpSchema::all_tensor_types_with_bfloat(),
+                      "Allow inputs and outputs to be any kind of tensor.");
+  // FIXME: Add a type/shape inference function
+
 #ifdef ENABLE_TRAINING_OPS
   // Should remove the shrunken_gather include from ENABLE_TRAINING_OPS once 1). compute optimizer is enabled for inference or
   // 2). this is needed by inference for other purpose.
