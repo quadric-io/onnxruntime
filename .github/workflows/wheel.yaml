@@ -1,30 +1,45 @@
-name: Release & Upload Wheel
+name: CI && Release & Upload Wheel
 
 on:
+  workflow_call:
+    inputs:
+      onnxruntime_branch:
+        type: string
+        default: "main"
   workflow_dispatch:
+    inputs:
+      onnxruntime_branch:
+        type: string
+        default: "main"
   push:
     branches:
       - main
-      - shayan-create-wheel-release
+  pull_request:
+    branches:
+      - main
 
 jobs:
   build_and_upload_wheel:
-    runs-on: linux-mk
+    runs-on: The_CTOs_Choice
     container:
       image: ghcr.io/quadric-io/tvm:devel
       options: "--mount type=bind,source=${{ github.workspace }},target=/workspace"
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
+      with:
+          repository: quadric-io/onnxruntime
+          ref: ${{ inputs.onnxruntime_branch || github.ref }}
     - name: Build ONNX Runtime wheel
       working-directory: /workspace
       run: |
         python3 -m pip install cmake --upgrade
-        ./build.sh --build_wheel --config Release --parallel --skip_tests --skip_submodule_sync
+        ./build.sh --build_wheel --config Release --parallel ${{ github.event_name == 'pull_request' && ' ' || '--skip_tests'}} --skip_submodule_sync --allow_running_as_root
         wheel_path=$(find . -name '*.whl' | xargs readlink -f)
         echo "wheel_path=$wheel_path" >> $GITHUB_ENV
     - name: Count releases
       id: count_releases
+      if: github.event_name != 'pull_request'
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
@@ -33,7 +48,13 @@ jobs:
           --url https://api.github.com/repos/${{ github.repository }}/releases \
           --header "Authorization: Bearer $GITHUB_TOKEN" | jq length)
         echo "count=$count" >> $GITHUB_ENV
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: ort-wheel
+        path: ${{ env.wheel_path }}
     - name: Create Release
+      if: github.ref == 'main' && ( github.event_name != 'workflow_call' && github.event_name != 'workflow_dispatch' )
       uses: softprops/action-gh-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
