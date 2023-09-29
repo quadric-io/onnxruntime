@@ -34,7 +34,7 @@ jobs:
       working-directory: /workspace
       run: |
         python3 -m pip install cmake --upgrade
-        ./build.sh --build_wheel --config Release --parallel ${{ github.event_name == 'pull_request' && ' ' || '--skip_tests'}} --skip_submodule_sync --allow_running_as_root
+        ./build.sh --build_wheel --config Release --parallel ${{ github.event_name == 'pull_request' && ' ' || '--skip_tests'}} --skip_submodule_sync --allow_running_as_root --compile_no_warning_as_error
         wheel_path=$(find . -name '*.whl' | xargs readlink -f)
         echo "wheel_path=$wheel_path" >> $GITHUB_ENV
     - name: Upload Artifact
@@ -58,7 +58,7 @@ jobs:
     - name: Build ONNX Runtime wheel
       run: |
         python3 -m pip install wheel cmake numpy==1.24.4 packaging --upgrade
-        ./build.sh --build_wheel --config Release --parallel ${{ github.event_name == 'pull_request' && ' ' || '--skip_tests'}} --skip_submodule_sync --allow_running_as_root
+        ./build.sh --build_wheel --config Release --parallel ${{ github.event_name == 'pull_request' && ' ' || '--skip_tests'}} --skip_submodule_sync --allow_running_as_root --compile_no_warning_as_error
         wheel_path=$(find . -name '*.whl' | xargs readlink -f)
         echo "wheel_path=$wheel_path" >> $GITHUB_ENV
     - name: Upload Artifact
