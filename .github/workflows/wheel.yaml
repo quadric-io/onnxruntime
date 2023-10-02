@@ -28,8 +28,8 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
-          repository: quadric-io/onnxruntime
-          ref: ${{ inputs.onnxruntime_branch || github.ref }}
+        repository: quadric-io/onnxruntime
+        ref: ${{ inputs.onnxruntime_branch || github.ref }}
     - name: Build ONNX Runtime wheel
       working-directory: /workspace
       run: |
@@ -44,21 +44,16 @@ jobs:
         path: ${{ env.wheel_path }}
 
   build_and_upload_wheel_mac:
-    runs-on: macos-13-xl
+    runs-on: [self-hosted, macOS, ARM64]
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
-          repository: quadric-io/onnxruntime
-          ref: ${{ inputs.onnxruntime_branch || github.ref }}
-    - name: Set up Python 3.10
-      uses: actions/setup-python@v4
-      with:
-        python-version: "3.10"
+        repository: quadric-io/onnxruntime
+        ref: ${{ inputs.onnxruntime_branch || github.ref }}      
     - name: Build ONNX Runtime wheel
       run: |
-        python3 -m pip install wheel cmake numpy==1.24.4 packaging --upgrade
-        ./build.sh --build_wheel --config Release --parallel ${{ github.event_name == 'pull_request' && ' ' || '--skip_tests'}} --skip_submodule_sync --allow_running_as_root --compile_no_warning_as_error
+        ./build.sh --build_wheel --config Release --parallel ${{ github.event_name == 'pull_request' && ' ' || '--skip_tests'}} --skip_submodule_sync --compile_no_warning_as_error --skip_submodule_sync --apple_deploy_target 12
         wheel_path=$(find . -name '*.whl' | xargs readlink -f)
         echo "wheel_path=$wheel_path" >> $GITHUB_ENV
     - name: Upload Artifact
@@ -68,17 +63,17 @@ jobs:
         path: ${{ env.wheel_path }}
 
   create_release:
-    if: github.ref == 'refs/heads/main' && ( github.event_name != 'workflow_call' && github.event_name != 'workflow_dispatch' )
-    needs: [build_and_upload_wheel_linux, build_and_upload_wheel_mac]
+    if: (github.ref == 'refs/heads/main') && ( github.event_name != 'workflow_call' && github.event_name != 'workflow_dispatch' )
+    needs: [build_and_upload_wheel_mac, build_and_upload_wheel_linux]
     runs-on: ubuntu-latest
     steps:
     - name: Download ort-wheel-linux artifact
-      uses: actions/download-artifact@v2
+      uses: actions/download-artifact@v3
       with:
         name: ort-wheel-linux
         path: artifacts/
     - name: Download ort-wheel-mac artifact
-      uses: actions/download-artifact@v2
+      uses: actions/download-artifact@v3
       with:
         name: ort-wheel-mac
         path: artifacts/
@@ -87,7 +82,6 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        apt-get update && apt-get install curl jq -y
         count=$(curl --request GET \
           --url https://api.github.com/repos/${{ github.repository }}/releases \
           --header "Authorization: Bearer $GITHUB_TOKEN" | jq length)
@@ -100,5 +94,4 @@ jobs:
         tag_name: v${{ env.count }}
         name: Release v${{ env.count }}
         files: |
-          artifacts/ort-wheel-linux/*.whl
-          artifacts/ort-wheel-mac/*.whl
+          artifacts/*.whl
