@@ -3043,7 +3043,6 @@ Input absmax is stored in same type as original type of B(float32, float16) with
       .Attr("element_wise", "True (1) if only element-wise ops, False (0) otherwise", AttributeProto::INT, true)
       .TypeConstraint("T", OpSchema::all_tensor_types_with_bfloat(),
                       "Allow inputs and outputs to be any kind of tensor.");
-  // FIXME: Add a type/shape inference function
 
 #ifdef ENABLE_TRAINING_OPS
   // Should remove the shrunken_gather include from ENABLE_TRAINING_OPS once 1). compute optimizer is enabled for inference or
