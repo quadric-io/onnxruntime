@@ -51,7 +51,7 @@ def _clean_initializers_helper(graph, model):
                 else:
                     new_attribute = attribute_to_kwarg(attr)
                 kwargs.update(new_attribute)
-            new_node = onnx_helper.make_node(node.op_type, node.input, node.output, name=node.name, **kwargs)
+            new_node = onnx_helper.make_node(node.op_type, node.input, node.output, name=node.name, domain=node.domain, **kwargs)
         new_nodes.append(new_node)
 
     graph.ClearField("node")
