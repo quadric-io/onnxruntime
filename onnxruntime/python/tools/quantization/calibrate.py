@@ -115,6 +115,7 @@ class CalibraterBase:
         augmented_model_path="augmented_model.onnx",
         symmetric=False,
         use_external_data_format=False,
+        data_types_to_calibrate: list[TensorProto.DataType] = [TensorProto.FLOAT],
     ):
         """
         :param model_path: ONNX model to calibrate. It should be a model file path
@@ -138,6 +139,7 @@ class CalibraterBase:
         self.augment_model = None
         self.infer_session = None
         self.execution_providers = ["CPUExecutionProvider"]
+        self.tensor_types_to_calibrate = data_types_to_calibrate
 
     def set_execution_providers(self, execution_providers=["CPUExecutionProvider"]):  # noqa: B006
         """
@@ -171,7 +173,6 @@ class CalibraterBase:
         initializer = {init.name for init in model.graph.initializer}
 
         tensors_to_calibrate = set()
-        tensor_type_to_calibrate = {TensorProto.FLOAT}
 
         for node in model.graph.node:
             if not self.op_types_to_calibrate or node.op_type in self.op_types_to_calibrate:
@@ -180,7 +181,7 @@ class CalibraterBase:
                         vi = value_infos[tensor_name]
                         if (
                             vi.type.HasField("tensor_type")
-                            and (vi.type.tensor_type.elem_type in tensor_type_to_calibrate)
+                            and (vi.type.tensor_type.elem_type in self.tensor_types_to_calibrate)
                             and (tensor_name not in initializer)
                         ):
                             tensors_to_calibrate.add(tensor_name)
@@ -224,6 +225,7 @@ class MinMaxCalibrater(CalibraterBase):
         use_external_data_format=False,
         moving_average=False,
         averaging_constant=0.01,
+        data_types_to_calibrate: list[TensorProto.DataType] = [TensorProto.FLOAT],
     ):
         """
         :param model_path: ONNX model to calibrate. It is a model path
@@ -240,6 +242,7 @@ class MinMaxCalibrater(CalibraterBase):
             augmented_model_path=augmented_model_path,
             symmetric=symmetric,
             use_external_data_format=use_external_data_format,
+            data_types_to_calibrate=data_types_to_calibrate,
         )
         self.intermediate_outputs = []
         self.calibrate_tensors_range = None
@@ -256,7 +259,7 @@ class MinMaxCalibrater(CalibraterBase):
         model and ensures their outputs are stored as part of the graph output
         :return: augmented ONNX model
         """
-        tensors, _ = self.select_tensors_to_calibrate(self.model)
+        tensors, value_infos = self.select_tensors_to_calibrate(self.model)
         reshape_shape_name = str(uuid.uuid4())
         reshape_shape = numpy_helper.from_array(np.array([1], dtype=np.int64), reshape_shape_name)
         self.model.graph.initializer.append(reshape_shape)
@@ -280,8 +283,10 @@ class MinMaxCalibrater(CalibraterBase):
                 name=intermediate_output,
             )
 
+            out_dtype = value_infos[tensor].type.tensor_type.elem_type
+
             self.model.graph.node.extend([reduce_node, reshape_node])
-            self.model.graph.output.append(helper.make_tensor_value_info(reduce_output, TensorProto.FLOAT, [1]))
+            self.model.graph.output.append(helper.make_tensor_value_info(reduce_output, out_dtype, [1]))
 
         for tensor in tensors:
             add_reduce_min_max(tensor, "ReduceMin")
@@ -396,6 +401,7 @@ class HistogramCalibrater(CalibraterBase):
         num_quantized_bins=2048,
         percentile=99.999,
         scenario="same",
+        data_types_to_calibrate: list[TensorProto.DataType] = [TensorProto.FLOAT]
     ):
         """
         :param model_path: ONNX model to calibrate. It is a model path.
@@ -415,6 +421,7 @@ class HistogramCalibrater(CalibraterBase):
             augmented_model_path=augmented_model_path,
             symmetric=symmetric,
             use_external_data_format=use_external_data_format,
+            data_types_to_calibrate=data_types_to_calibrate,
         )
         self.intermediate_outputs = []
         self.calibrate_tensors_range = None
@@ -515,6 +522,7 @@ class EntropyCalibrater(HistogramCalibrater):
         symmetric=False,
         num_bins=128,
         num_quantized_bins=128,
+        data_types_to_calibrate: list[TensorProto] = [TensorProto.FLOAT],
     ):
         """
         :param model_path: ONNX model to calibrate. It is a model path
@@ -535,6 +543,7 @@ class EntropyCalibrater(HistogramCalibrater):
             symmetric=symmetric,
             num_bins=num_bins,
             num_quantized_bins=num_quantized_bins,
+            data_types_to_calibrate=data_types_to_calibrate,
         )
 
 
@@ -549,6 +558,7 @@ class PercentileCalibrater(HistogramCalibrater):
         symmetric=False,
         num_bins=2048,
         percentile=99.999,
+        data_types_to_calibrate: list[TensorProto] = [TensorProto.FLOAT],
     ):
         """
         :param model_path: ONNX model to calibrate. It is a model path
@@ -569,6 +579,7 @@ class PercentileCalibrater(HistogramCalibrater):
             symmetric=symmetric,
             num_bins=num_bins,
             percentile=percentile,
+            data_types_to_calibrate=data_types_to_calibrate,
         )
 
 
@@ -582,6 +593,7 @@ class DistributionCalibrater(HistogramCalibrater):
         method="distribution",
         num_bins=128,
         scenario="same",
+        data_types_to_calibrate: list[TensorProto] = [TensorProto.FLOAT],
     ):
         """
         :param model_path: ONNX model to calibrate. It is a model path
@@ -604,6 +616,7 @@ class DistributionCalibrater(HistogramCalibrater):
             method=method,
             num_bins=num_bins,
             scenario=scenario,
+            data_types_to_calibrate=data_types_to_calibrate,
         )
 
 
@@ -1004,6 +1017,7 @@ def create_calibrator(
     calibrate_method=CalibrationMethod.MinMax,
     use_external_data_format=False,
     extra_options={},  # noqa: B006
+    data_types_to_calibrate: list[TensorProto.DataType] = [TensorProto.FLOAT],
 ):
     calibrator = None
     if calibrate_method == CalibrationMethod.MinMax:
@@ -1019,6 +1033,7 @@ def create_calibrator(
             symmetric=symmetric,
             moving_average=moving_average,
             averaging_constant=averaging_constant,
+            data_types_to_calibrate=data_types_to_calibrate,
         )
     elif calibrate_method == CalibrationMethod.Entropy:
         # default settings for entropy algorithm
@@ -1033,6 +1048,7 @@ def create_calibrator(
             symmetric=symmetric,
             num_bins=num_bins,
             num_quantized_bins=num_quantized_bins,
+            data_types_to_calibrate=data_types_to_calibrate,
         )
     elif calibrate_method == CalibrationMethod.Percentile:
         # default settings for percentile algorithm
@@ -1047,6 +1063,7 @@ def create_calibrator(
             symmetric=symmetric,
             num_bins=num_bins,
             percentile=percentile,
+            data_types_to_calibrate=data_types_to_calibrate,
         )
 
     elif calibrate_method == CalibrationMethod.Distribution:
@@ -1061,6 +1078,7 @@ def create_calibrator(
             use_external_data_format=use_external_data_format,
             num_bins=num_bins,
             scenario=scenario,
+            data_types_to_calibrate=data_types_to_calibrate,
         )
 
     if calibrator:
