@@ -1664,7 +1664,7 @@ class SymbolicShapeInference:
         keep_dims = get_attribute(node, "keepdims", 1)
         if get_opset(self.out_mp_) >= 13 and len(node.input) > 1:
             # ReduceSum changes axes to input[1] in opset 13
-            self._infer_reduce_common(node)
+            self._infer_reduce_common(node, keep_dims)
 
     def _infer_ReduceProd(self, node):  # noqa: N802
         axes = get_attribute(node, "axes")
@@ -1678,9 +1678,9 @@ class SymbolicShapeInference:
         keep_dims = get_attribute(node, "keepdims", 1)
         if get_opset(self.out_mp_) >= 18 and len(node.input) > 1:
             # ReduceMean changes axes to input[1] in opset 18
-            self._infer_reduce_common(node)
+            self._infer_reduce_common(node, keep_dims)
 
-    def _infer_reduce_common(self, node):
+    def _infer_reduce_common(self, node, keep_dims):
         axes = self._try_get_value(node, 1)
         vi = self.known_vi_[node.output[0]]
         if axes is None:
