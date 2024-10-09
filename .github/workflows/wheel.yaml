@@ -63,6 +63,8 @@ jobs:
         path: ${{ env.wheel_path }}
 
   create_release:
+    permissions:
+      contents: write
     if: (github.ref == 'refs/heads/main') && ( github.event_name != 'workflow_call' && github.event_name != 'workflow_dispatch' )
     needs: [build_and_upload_wheel_mac, build_and_upload_wheel_linux]
     runs-on: ubuntu-latest
