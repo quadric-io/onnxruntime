@@ -24,6 +24,9 @@ jobs:
     container:
       image: ghcr.io/quadric-io/tvm:devel
       options: "--mount type=bind,source=${{ github.workspace }},target=/workspace"
+      credentials:
+       username: ${{ github.actor }}
+       password: ${{ secrets.github_token }}
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
