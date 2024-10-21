@@ -44,13 +44,14 @@ jobs:
         path: ${{ env.wheel_path }}
 
   build_and_upload_wheel_mac:
+    if: github.repository != 'quadric-io/sdk-cli'
     runs-on: [self-hosted, macOS, ARM64]
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
         repository: quadric-io/onnxruntime
-        ref: ${{ inputs.onnxruntime_branch || github.ref }}      
+        ref: ${{ inputs.onnxruntime_branch || github.ref }}
     - name: Build ONNX Runtime wheel
       run: |
         ./build.sh --build_wheel --config Release --parallel ${{ github.event_name == 'pull_request' && ' ' || '--skip_tests'}} --skip_submodule_sync --compile_no_warning_as_error --skip_submodule_sync --apple_deploy_target 12
