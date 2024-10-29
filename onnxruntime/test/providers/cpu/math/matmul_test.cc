@@ -219,7 +219,9 @@ TEST(MathOpTest, MatMulUint64Type) {
   RunMatMulTest<uint64_t>(9);
 }
 
-#if defined(USE_CUDA) || defined(USE_ROCM)
+
+
+// #if defined(USE_CUDA) || defined(USE_ROCM)
 TEST(MathOpTest, MatMul_Float16) {
 #ifdef USE_CUDA
   int min_cuda_architecture = 530;
@@ -250,7 +252,7 @@ TEST(MathOpTest, MatMul_Float16) {
       .Config(run_with_tunable_op)
       .RunWithConfig();
 }
-#endif
+// #endif
 
 #if defined(USE_CUDA) || defined(USE_ROCM) || defined(USE_DNNL)
 TEST(MathOpTest, MatMul_bfloat16) {
