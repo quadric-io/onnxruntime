@@ -50,6 +50,23 @@ EIGEN_MATMUL_FUNCTION(uint32_t)
 EIGEN_MATMUL_FUNCTION(int64_t)
 EIGEN_MATMUL_FUNCTION(uint64_t)
 
+
+template <>
+void MatMul<MLFloat16>(ptrdiff_t M, ptrdiff_t N, ptrdiff_t K, const MLFloat16* A, const MLFloat16* B, MLFloat16* C, concurrency::ThreadPool*) {
+  // Convert MLFloat16* to Eigen::half* using reinterpret_cast
+  const Eigen::half* A_half = reinterpret_cast<const Eigen::half*>(A);
+  const Eigen::half* B_half = reinterpret_cast<const Eigen::half*>(B);
+  Eigen::half* C_half = reinterpret_cast<Eigen::half*>(C);
+
+  // Perform matrix multiplication using Eigen
+  auto C_mat = Eigen::Map<Eigen::Matrix<Eigen::half, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(C_half, N, M);
+  C_mat.noalias() = Eigen::Map<const Eigen::Matrix<Eigen::half, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(B_half, N, K) *
+                    Eigen::Map<const Eigen::Matrix<Eigen::half, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(A_half, K, M);
+}
+
+// template void MatMul<MLFloat16>(ptrdiff_t M, ptrdiff_t N, ptrdiff_t K, const MLFloat16* A, const MLFloat16* B, MLFloat16* C, concurrency::ThreadPool*);
+
+
 ////////////////////////////////////////////////////////////////////////////////
 // BLAS alternatives.
 // Depending on whether we have specified an external BLAS library or not, we

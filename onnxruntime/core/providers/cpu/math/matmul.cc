@@ -88,6 +88,34 @@ ONNX_CPU_OPERATOR_TYPED_KERNEL(
         .TypeConstraint("T", BuildKernelDefConstraints<int64_t, uint64_t>()),
     MatMul<int64_t>);
 
+ONNX_CPU_OPERATOR_VERSIONED_TYPED_KERNEL(
+    MatMul,
+    7, 8,
+    MLFloat16,
+    KernelDefBuilder().TypeConstraint("T", DataTypeImpl::GetTensorType<MLFloat16>()),
+    MatMul<MLFloat16>);
+
+ONNX_CPU_OPERATOR_VERSIONED_TYPED_KERNEL(
+    MatMul,
+    9, 10,
+    MLFloat16,
+    KernelDefBuilder().TypeConstraint("T", DataTypeImpl::GetTensorType<MLFloat16>()),
+    MatMul<MLFloat16>);
+
+ONNX_CPU_OPERATOR_VERSIONED_TYPED_KERNEL(
+    MatMul,
+    11, 12,
+    MLFloat16,
+    KernelDefBuilder().TypeConstraint("T", DataTypeImpl::GetTensorType<MLFloat16>()),
+    MatMul<MLFloat16>);
+
+ONNX_CPU_OPERATOR_TYPED_KERNEL(
+    MatMul,
+    13,
+    MLFloat16,
+    KernelDefBuilder().TypeConstraint("T", DataTypeImpl::GetTensorType<MLFloat16>()),
+    MatMul<MLFloat16>);
+
 template <typename T>
 Status MatMul<T>::Compute(OpKernelContext* ctx) const {
   concurrency::ThreadPool* thread_pool = ctx->GetOperatorThreadPool();
