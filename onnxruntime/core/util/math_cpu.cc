@@ -51,18 +51,25 @@ EIGEN_MATMUL_FUNCTION(int64_t)
 EIGEN_MATMUL_FUNCTION(uint64_t)
 
 
-template <>
-void MatMul<MLFloat16>(ptrdiff_t M, ptrdiff_t N, ptrdiff_t K, const MLFloat16* A, const MLFloat16* B, MLFloat16* C, concurrency::ThreadPool*) {
-  // Convert MLFloat16* to Eigen::half* using reinterpret_cast
-  const Eigen::half* A_half = reinterpret_cast<const Eigen::half*>(A);
-  const Eigen::half* B_half = reinterpret_cast<const Eigen::half*>(B);
-  Eigen::half* C_half = reinterpret_cast<Eigen::half*>(C);
 
-  // Perform matrix multiplication using Eigen
-  auto C_mat = Eigen::Map<Eigen::Matrix<Eigen::half, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(C_half, N, M);
-  C_mat.noalias() = Eigen::Map<const Eigen::Matrix<Eigen::half, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(B_half, N, K) *
-                    Eigen::Map<const Eigen::Matrix<Eigen::half, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(A_half, K, M);
-}
+
+// template <>
+// void MatMul<MLFloat16>(ptrdiff_t M, ptrdiff_t N, ptrdiff_t K, const MLFloat16* A, const MLFloat16* B, MLFloat16* C, concurrency::ThreadPool* thread_pool) {
+//   // // Convert MLFloat16* to Eigen::half* using reinterpret_cast
+//   // const Eigen::half* A_half = reinterpret_cast<const Eigen::half*>(A);
+//   // const Eigen::half* B_half = reinterpret_cast<const Eigen::half*>(B);
+//   // Eigen::half* C_half = reinterpret_cast<Eigen::half*>(C);
+
+//   // // Perform matrix multiplication using Eigen
+//   // auto C_mat = Eigen::Map<Eigen::Matrix<Eigen::half, Eigen::Dynamic, Eigen::Dynamic, Eigen::ColMajor>>(C_half, M, N);
+//   // C_mat.noalias() = Eigen::Map<const Eigen::Matrix<Eigen::half, Eigen::Dynamic, Eigen::Dynamic, Eigen::ColMajor>>(A_half, M, K) *
+//   //                   Eigen::Map<const Eigen::Matrix<Eigen::half, Eigen::Dynamic, Eigen::Dynamic, Eigen::ColMajor>>(B_half, K, N);
+
+//   // Optionally, handle threading with thread_pool if needed (not shown here).
+
+//     math::Gemm<Eigen::half>(CblasNoTrans, CblasNoTrans, M, N, K, *reinterpret_cast<Eigen::half*>(&alpha),
+//                           reinterpret_cast<const Eigen::half*>(A), reinterpret_cast<const Eigen::half*>(B), *reinterpret_cast<Eigen::half*>(&beta), reinterpret_cast<Eigen::half*>(C), thread_pool);
+// }
 
 // template void MatMul<MLFloat16>(ptrdiff_t M, ptrdiff_t N, ptrdiff_t K, const MLFloat16* A, const MLFloat16* B, MLFloat16* C, concurrency::ThreadPool*);
 
@@ -200,6 +207,18 @@ void Gemm<double, ThreadPool>(CBLAS_TRANSPOSE TransA, CBLAS_TRANSPOSE TransB, pt
 template <>
 void MatMul<float>(ptrdiff_t M, ptrdiff_t N, ptrdiff_t K, const float* A, const float* B, float* C, ThreadPool* threadpool) {
   MlasGemm(CblasNoTrans, CblasNoTrans, M, N, K, 1.f, A, K, B, N, 0.f, C, N, threadpool);
+}
+
+template <>
+void MatMul<MLFloat16>(ptrdiff_t M, ptrdiff_t N, ptrdiff_t K, const MLFloat16* A, const MLFloat16* B, MLFloat16* C, concurrency::ThreadPool* thread_pool) {
+  // Set alpha to 1 and beta to 0
+  Eigen::half alpha = Eigen::half(1.0f);
+  Eigen::half beta = Eigen::half(0.0f);
+
+  // Use GEMM with the given parameters
+  math::Gemm<Eigen::half>(CblasNoTrans, CblasNoTrans, M, N, K, alpha,
+                          reinterpret_cast<const Eigen::half*>(A), reinterpret_cast<const Eigen::half*>(B), beta,
+                          reinterpret_cast<Eigen::half*>(C), thread_pool);
 }
 
 #ifdef MLAS_SUPPORTS_GEMM_DOUBLE
