@@ -221,12 +221,12 @@ static bool IsIsolatedFp16NodeOnCpu(const onnxruntime::Node& node, onnxruntime::
 }
 
 static Status ForceSingleNodeCPUFloat16ToFloat32(onnxruntime::Graph& graph, const KernelRegistry& cpu_kernel_registry) {
-  for (auto& node : graph.Nodes()) {
-    if (IsIsolatedFp16NodeOnCpu(node, graph, cpu_kernel_registry)) {
-      // unassign the node so that NeedInsertCast will return true for it, forcing it to fp32
-      node.SetExecutionProviderType("");
-    }
-  }
+  // for (auto& node : graph.Nodes()) {
+  //   if (IsIsolatedFp16NodeOnCpu(node, graph, cpu_kernel_registry)) {
+  //     // unassign the node so that NeedInsertCast will return true for it, forcing it to fp32
+  //     node.SetExecutionProviderType("");
+  //   }
+  // }
 
   return Status::OK();
 }
