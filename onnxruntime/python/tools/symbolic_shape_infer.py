@@ -968,6 +968,24 @@ class SymbolicShapeInference:
         new_node = self._filter_node_inputs(node, prequant_input_idx)
         new_node.op_type = new_node.op_type.replace("QLinear", "")
         new_node.domain = ""
+
+        for output_name in new_node.output:
+            vi = self.known_vi_.get(output_name)
+            if vi is None:
+                vi = helper.make_tensor_value_info(
+                    name=output_name,
+                    elem_type=onnx.TensorProto.FLOAT,
+                    shape=[None, None]
+                )
+                self.known_vi_[output_name] = vi
+            elif not vi.type.HasField("tensor_type"):
+                vi_with_type = helper.make_tensor_value_info(
+                    name=output_name,
+                    elem_type=onnx.TensorProto.FLOAT,
+                    shape=[None, None]
+                )
+                vi.type.CopyFrom(vi_with_type.type)
+
         self._onnx_infer_single_node(new_node)
 
     def _infer_qlinear_unary_op(self, node):
