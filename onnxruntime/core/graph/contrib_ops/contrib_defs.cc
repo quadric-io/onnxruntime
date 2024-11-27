@@ -3712,7 +3712,7 @@ GatherBlockQuantized is a Gather with data quantized. It is similar to Gather (h
       .Attr("ccl_func_name", "Name of CCL function.", AttributeProto::STRING)
       .Attr("sub_graph", "Replaced sub-graph.", AttributeProto::GRAPH)
       .Attr("element_wise", "True (1) if only element-wise ops, False (0) otherwise", AttributeProto::INT, true)
-      .TypeConstraint("T", OpSchema::all_tensor_types_with_bfloat(),
+      .TypeConstraint("T", OpSchema::all_tensor_types_ir4(),
                       "Allow inputs and outputs to be any kind of tensor.");
 
 #ifdef ENABLE_TRAINING_OPS
