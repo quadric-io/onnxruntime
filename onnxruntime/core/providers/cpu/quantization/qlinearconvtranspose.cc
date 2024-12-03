@@ -118,7 +118,7 @@ Status QLinearConvTranspose<T>::DoConvTranspose(OpKernelContext* context) const 
   size_t num_inputs = OpKernel::Node().InputDefs().size();
   ConvTransposeAttributes::Prepare p;
   bool has_bias = num_inputs == 9;
-  ORT_RETURN_IF_ERROR(conv_transpose_attrs_.PrepareForCompute(context, has_bias, p, false, nullptr, true));
+  ORT_RETURN_IF_ERROR(conv_transpose_attrs_.PrepareForCompute(context, has_bias, p, false, nullptr, false, true, true));
 
   const int64_t input_image_size = p.input_shape.Size();
 
