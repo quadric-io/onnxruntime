@@ -50,6 +50,30 @@ EIGEN_MATMUL_FUNCTION(uint32_t)
 EIGEN_MATMUL_FUNCTION(int64_t)
 EIGEN_MATMUL_FUNCTION(uint64_t)
 
+
+
+
+// template <>
+// void MatMul<MLFloat16>(ptrdiff_t M, ptrdiff_t N, ptrdiff_t K, const MLFloat16* A, const MLFloat16* B, MLFloat16* C, concurrency::ThreadPool* thread_pool) {
+//   // // Convert MLFloat16* to Eigen::half* using reinterpret_cast
+//   // const Eigen::half* A_half = reinterpret_cast<const Eigen::half*>(A);
+//   // const Eigen::half* B_half = reinterpret_cast<const Eigen::half*>(B);
+//   // Eigen::half* C_half = reinterpret_cast<Eigen::half*>(C);
+
+//   // // Perform matrix multiplication using Eigen
+//   // auto C_mat = Eigen::Map<Eigen::Matrix<Eigen::half, Eigen::Dynamic, Eigen::Dynamic, Eigen::ColMajor>>(C_half, M, N);
+//   // C_mat.noalias() = Eigen::Map<const Eigen::Matrix<Eigen::half, Eigen::Dynamic, Eigen::Dynamic, Eigen::ColMajor>>(A_half, M, K) *
+//   //                   Eigen::Map<const Eigen::Matrix<Eigen::half, Eigen::Dynamic, Eigen::Dynamic, Eigen::ColMajor>>(B_half, K, N);
+
+//   // Optionally, handle threading with thread_pool if needed (not shown here).
+
+//     math::Gemm<Eigen::half>(CblasNoTrans, CblasNoTrans, M, N, K, *reinterpret_cast<Eigen::half*>(&alpha),
+//                           reinterpret_cast<const Eigen::half*>(A), reinterpret_cast<const Eigen::half*>(B), *reinterpret_cast<Eigen::half*>(&beta), reinterpret_cast<Eigen::half*>(C), thread_pool);
+// }
+
+// template void MatMul<MLFloat16>(ptrdiff_t M, ptrdiff_t N, ptrdiff_t K, const MLFloat16* A, const MLFloat16* B, MLFloat16* C, concurrency::ThreadPool*);
+
+
 ////////////////////////////////////////////////////////////////////////////////
 // BLAS alternatives.
 // Depending on whether we have specified an external BLAS library or not, we
@@ -184,6 +208,58 @@ template <>
 void MatMul<float>(ptrdiff_t M, ptrdiff_t N, ptrdiff_t K, const float* A, const float* B, float* C, ThreadPool* threadpool) {
   MlasGemm(CblasNoTrans, CblasNoTrans, M, N, K, 1.f, A, K, B, N, 0.f, C, N, threadpool);
 }
+
+
+template <>
+void MatMul<MLFloat16>(ptrdiff_t M, ptrdiff_t N, ptrdiff_t K,  const MLFloat16* a_data, const MLFloat16* b_data, MLFloat16* y_data, concurrency::ThreadPool* thread_pool) {
+
+MLFloat16 alpha = MLFloat16(1.0f);
+MLFloat16 beta = MLFloat16(0.0f);
+ // if input is empty tensor, return directly as nothing need to be calculated.
+  if (M == 0 || N == 0)
+    return;
+
+#if defined(__GNUC__) && defined(HAS_CLASS_MEMACCESS)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wclass-memaccess"
+#endif
+
+memset(&beta, 0, sizeof(MLFloat16));
+#if defined(__GNUC__) && defined(HAS_CLASS_MEMACCESS)
+#pragma GCC diagnostic pop
+#endif
+#ifdef MLAS_F16VEC_INTRINSICS_SUPPORTED
+
+
+  MLAS_HALF_GEMM_DATA_PARAMS data;
+  data.A = a_data;
+  data.lda = K;
+  data.B = b_data;
+  data.ldb = N;
+  data.C = y_data;
+  data.ldc = N;
+  // if (c_shape != nullptr) {
+  //   data.Bias = c_data;
+  // }
+  MlasHalfGemmBatch(M, N, K, 1, &data, thread_pool);
+  return;
+  
+#endif
+  // Fallback to Eigen
+  // // Broadcast the bias as needed if bias is given
+  // GemmBroadcastBias(M, N, beta, c_data, c_shape, y_data);
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstrict-aliasing"
+#endif
+  math::Gemm<Eigen::half>(CblasNoTrans, CblasNoTrans, M, N, K, *reinterpret_cast<Eigen::half*>(&alpha),
+                          reinterpret_cast<const Eigen::half*>(a_data), reinterpret_cast<const Eigen::half*>(b_data), *reinterpret_cast<Eigen::half*>(&beta), reinterpret_cast<Eigen::half*>(y_data), thread_pool);
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
+    
+}
+
 
 #ifdef MLAS_SUPPORTS_GEMM_DOUBLE
 template <>
