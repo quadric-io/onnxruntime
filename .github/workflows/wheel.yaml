@@ -22,7 +22,7 @@ jobs:
   build_and_upload_wheel_linux:
     runs-on: The_CTOs_Choice
     container:
-      image: ghcr.io/quadric-io/tvm:devel
+      image: ghcr.io/quadric-io/tvm:chris-fix-onnx-version
       options: "--mount type=bind,source=${{ github.workspace }},target=/workspace"
     steps:
     - name: Checkout repository
