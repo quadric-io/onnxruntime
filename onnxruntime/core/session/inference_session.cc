@@ -1787,8 +1787,11 @@ common::Status InferenceSession::Initialize() {
       return false;
     }();
 
+    std::cout << "init" << std::endl;
+
     if (!loading_ort_format) {
 #if !defined(ORT_MINIMAL_BUILD)
+      std::cout << "minimal" << std::endl;
       const auto minimal_build_opt_config_value = session_options_.config_options.GetConfigOrDefault(
           kOrtSessionOptionsConfigMinimalBuildOptimizations, "");
       MinimalBuildOptimizationHandling minimal_build_optimization_handling{};
