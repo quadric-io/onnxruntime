@@ -93,18 +93,24 @@ static Status MatchAndProcess(
     const SatRuntimeOptimizationSaveContext* save_context) {
   Status status = Status::OK();
 
-  LOGS(logger, WARNING) << "Transformer name: " << transformer_name;
-
   do {
     std::optional<NodesToOptimizeIndices> node_selection_opt{};
     const SelectorActionRegistry::Entry* selector_action_entry_ptr = nullptr;
 
-    LOGS(logger, WARNING) << "Selector action entry name: " << selector_action_entry_ptr->name;
-
     const auto selector_action_entries =
         selector_action_registry.LookUpByOpTypeAndDomain(node.OpType(), node.Domain());
     std::string key = SelectorActionRegistry::OpVersionsMapKey(node.OpType(), node.Domain());
+
+    if (node.OpType() == "Concat") {
+      LOGS(logger, WARNING) << "Concat found";
+    }
+
     for (const auto& entry : selector_action_entries) {
+
+      if (node.OpType() == "Concat") {
+        LOGS(logger, WARNING) << "  Entry found";
+      }
+
       // check the supported versions if specified
       const auto& versions = entry->ops_and_versions.find(key)->second;
       if (!versions.empty()) {
@@ -193,6 +199,8 @@ Status SelectorActionTransformer::ApplySelectorsAndActions(
     const logging::Logger& logger,
     const SatRuntimeOptimizationSaveContext* save_context) const {
   GraphViewer graph_viewer(graph);
+
+  LOGS(logger, WARNING) << "Transformer name: " << Name();
 
   for (auto index : graph_viewer.GetNodesInTopologicalOrder()) {
     auto* node = graph.GetNode(index);
