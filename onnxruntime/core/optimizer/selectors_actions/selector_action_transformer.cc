@@ -93,9 +93,13 @@ static Status MatchAndProcess(
     const SatRuntimeOptimizationSaveContext* save_context) {
   Status status = Status::OK();
 
+  LOGS(logger, WARNING) << "Transformer name: " << transformer_name;
+
   do {
     std::optional<NodesToOptimizeIndices> node_selection_opt{};
     const SelectorActionRegistry::Entry* selector_action_entry_ptr = nullptr;
+
+    LOGS(logger, WARNING) << "Selector action entry name: " << selector_action_entry_ptr->name;
 
     const auto selector_action_entries =
         selector_action_registry.LookUpByOpTypeAndDomain(node.OpType(), node.Domain());
