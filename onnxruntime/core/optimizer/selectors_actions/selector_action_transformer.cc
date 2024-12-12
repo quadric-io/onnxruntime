@@ -123,7 +123,7 @@ static Status MatchAndProcess(
       break;
     }
 
-    LOGS(logger, VERBOSE) << "Matched " << node.OpType();
+    LOGS(logger, WARNING) << "Matched " << node.OpType();
 
     const auto& selector_action_entry = *selector_action_entry_ptr;
     const auto& action = *selector_action_entry.action;
@@ -131,10 +131,12 @@ static Status MatchAndProcess(
     const NodesToOptimize node_group(graph, node_selection);
 
     if (save_context) {
+      LOGS(logger, WARNING) << "save_context";
       // don't save a runtime optimization again if it already exists
       // this might happen if the transformer is run multiple times, e.g., from a graph transformer manager which may
       //   run its transformers in multiple passes
       if (graph.RuntimeOptimizations().RecordExists(transformer_name, selector_action_entry.name, node_selection)) {
+        LOGS(logger, WARNING) << "don't save runtime optim";
         break;
       }
 
