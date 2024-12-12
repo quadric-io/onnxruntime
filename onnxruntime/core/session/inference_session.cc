@@ -1787,11 +1787,9 @@ common::Status InferenceSession::Initialize() {
       return false;
     }();
 
-    LOGS(*session_logger_, WARNING) << "init";
 
     if (!loading_ort_format) {
 #if !defined(ORT_MINIMAL_BUILD)
-      LOGS(*session_logger_, WARNING) << "!defined(ORT_MINIMAL_BUILD)";
       const auto minimal_build_opt_config_value = session_options_.config_options.GetConfigOrDefault(
           kOrtSessionOptionsConfigMinimalBuildOptimizations, "");
       MinimalBuildOptimizationHandling minimal_build_optimization_handling{};
@@ -3202,7 +3200,6 @@ common::Status InferenceSession::AddPredefinedTransformers(
     TransformerLevel graph_optimization_level,
     MinimalBuildOptimizationHandling minimal_build_optimization_handling,
     RecordRuntimeOptimizationProducedNodeOpSchemaFn record_runtime_optimization_produced_op_schema_fn) const {
-  LOGS(*session_logger_, WARNING) << "AddPredefinedTransformers";
   const auto& cpu_ep = *execution_providers_.Get(onnxruntime::kCpuExecutionProvider);
   for (int i = static_cast<int>(TransformerLevel::Level1); i <= static_cast<int>(TransformerLevel::MaxLevel); i++) {
     TransformerLevel level = static_cast<TransformerLevel>(i);
@@ -3214,13 +3211,11 @@ common::Status InferenceSession::AddPredefinedTransformers(
             minimal_build_optimization_handling == MinimalBuildOptimizationHandling::ApplyFullBuildOptimizations;
 
         if (use_full_build_optimizations) {
-          LOGS(*session_logger_, WARNING) << "use_full_build_optimizations";
           return optimizer_utils::GenerateTransformers(level, session_options_, cpu_ep,
                                                        optimizers_to_disable_,
                                                        GetIntraOpThreadPoolToUse(),
                                                        session_state_->GetMutableBufferedTensors());
         } else {
-          LOGS(*session_logger_, WARNING) << "minimal_build_optimizations";
           const auto sat_context =
               minimal_build_optimization_handling ==
                       MinimalBuildOptimizationHandling::SaveMinimalBuildRuntimeOptimizations

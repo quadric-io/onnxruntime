@@ -127,7 +127,7 @@ static Status MatchAndProcess(
       break;
     }
 
-    LOGS(logger, WARNING) << "Matched " << node.OpType();
+    // LOGS(logger, WARNING) << "Matched " << node.OpType();
 
     const auto& selector_action_entry = *selector_action_entry_ptr;
     const auto& action = *selector_action_entry.action;
