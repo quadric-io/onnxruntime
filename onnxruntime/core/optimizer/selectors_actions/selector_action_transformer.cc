@@ -103,6 +103,7 @@ static Status MatchAndProcess(
 
     if (node.OpType() == "Concat") {
       LOGS(logger, WARNING) << "Concat found";
+      LOGS(logger, WARNING) << "Key: " << key;
     }
 
     for (const auto& entry : selector_action_entries) {
@@ -131,6 +132,10 @@ static Status MatchAndProcess(
         continue;
       }
 
+      if (node.OpType() == "Concat") {
+        LOGS(logger, WARNING) << "Has selection";
+      }
+
       node_selection_opt = std::move(selection);
       selector_action_entry_ptr = entry.get();
       break;
@@ -140,7 +145,9 @@ static Status MatchAndProcess(
       break;
     }
 
-    // LOGS(logger, WARNING) << "Matched " << node.OpType();
+    if (node.OpType() == "Concat") {
+      LOGS(logger, WARNING) << "Matched " << node.OpType();
+    }
 
     const auto& selector_action_entry = *selector_action_entry_ptr;
     const auto& action = *selector_action_entry.action;
