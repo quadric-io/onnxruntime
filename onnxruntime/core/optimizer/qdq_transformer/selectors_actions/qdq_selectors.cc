@@ -106,7 +106,6 @@ std::optional<NodesToOptimizeIndices> BaseSelector::Select(const GraphViewer& gr
   */
 
   const auto qdq_group = node_group_selector_->GetQDQSelection(graph_viewer, node);
-  std::cerr << qdq_group.has_value() << std::endl;
   if (!qdq_group.has_value()) {
     return std::nullopt;
   }
@@ -260,13 +259,21 @@ bool VariadicNodeGroupSelector::Check(const GraphViewer& graph_viewer,
     return false;
   }
 
+  std::cerr << "Here 1" << std::endl;
+
   // All DQs' inputs and Q's output should have same data type
   int32_t dt_input = dq_nodes[0]->InputDefs()[0]->TypeAsProto()->tensor_type().elem_type();
   for (size_t dq_idx = 1; dq_idx < dq_nodes.size(); dq_idx++) {
     if (dt_input != dq_nodes[dq_idx]->InputDefs()[0]->TypeAsProto()->tensor_type().elem_type()) {
+      std::cerr << dq_nodes[0]->Name() << std::endl;
+      std::cerr << dt_input << std::endl;
+      std::cerr << dq_nodes[1]->Name() << std::endl;
+      std::cerr << dq_nodes[dq_idx]->InputDefs()[0]->TypeAsProto()->tensor_type().elem_type() << std::endl;
       return false;
     }
   }
+
+  std::cerr << "Here 2" << std::endl;
 
   int32_t dt_output = q_nodes[0]->OutputDefs()[0]->TypeAsProto()->tensor_type().elem_type();
   for (size_t q_idx = 1; q_idx < q_nodes.size(); q_idx++) {
@@ -275,18 +282,26 @@ bool VariadicNodeGroupSelector::Check(const GraphViewer& graph_viewer,
     }
   }
 
+  std::cerr << "Here 3" << std::endl;
+
   if (dt_input != dt_output) {
     return false;
   }
+
+  std::cerr << "Here 4" << std::endl;
 
   // 16-bit int types must be explicitly allowed.
   if (!allow_16bit_ && Is16BitIntType(dt_input)) {
     return false;
   }
 
+  std::cerr << "Here 5" << std::endl;
+
   if (!allow_4bit_ && Is4BitIntType(dt_input)) {
     return false;
   }
+
+  std::cerr << "Here 6" << std::endl;
 
   return true;
 }

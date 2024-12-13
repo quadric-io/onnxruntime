@@ -150,11 +150,9 @@ static Status MatchAndProcess(
       break;
     }
 
-    /*
     if (node.OpType() == "Concat") {
       LOGS(logger, WARNING) << "Matched " << node.OpType();
     }
-    */
 
     const auto& selector_action_entry = *selector_action_entry_ptr;
     const auto& action = *selector_action_entry.action;
