@@ -106,6 +106,7 @@ std::optional<NodesToOptimizeIndices> BaseSelector::Select(const GraphViewer& gr
   */
 
   const auto qdq_group = node_group_selector_->GetQDQSelection(graph_viewer, node);
+  std::cerr << qdq_group.has_value() << std::endl;
   if (!qdq_group.has_value()) {
     return std::nullopt;
   }
