@@ -132,6 +132,7 @@ static Status MatchAndProcess(
         continue;
       }
 
+      LOGS(logger, WARNING) << "Has selection";
       if (node.OpType() == "Concat") {
         LOGS(logger, WARNING) << "Has selection";
       }
