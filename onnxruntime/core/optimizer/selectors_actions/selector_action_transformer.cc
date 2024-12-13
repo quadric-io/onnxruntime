@@ -108,15 +108,22 @@ static Status MatchAndProcess(
     for (const auto& entry : selector_action_entries) {
 
       if (node.OpType() == "Concat") {
-        LOGS(logger, WARNING) << "  Entry found";
+        LOGS(logger, WARNING) << "Entry: " << entry->name;
+        //LOGS(logger, WARNING) << entry->ops_and_versions.find(node.OpType());
+        //LOGS(logger, WARNING) << entry->ops_and_versions.find(key);
       }
 
       // check the supported versions if specified
       const auto& versions = entry->ops_and_versions.find(key)->second;
+
       if (!versions.empty()) {
         if (std::find(versions.cbegin(), versions.cend(), node.SinceVersion()) == versions.cend()) {
           continue;
         }
+      }
+
+      if (node.OpType() == "Concat") {
+        LOGS(logger, WARNING) << "Supported";
       }
 
       auto selection = entry->selector->Select(graph_viewer, node);
