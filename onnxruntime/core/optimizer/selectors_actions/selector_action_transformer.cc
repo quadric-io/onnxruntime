@@ -101,14 +101,16 @@ static Status MatchAndProcess(
         selector_action_registry.LookUpByOpTypeAndDomain(node.OpType(), node.Domain());
     std::string key = SelectorActionRegistry::OpVersionsMapKey(node.OpType(), node.Domain());
 
+    /*
     if (node.OpType() == "Concat") {
       LOGS(logger, WARNING) << "Concat found";
       LOGS(logger, WARNING) << "Key: " << key;
     }
+    */
 
     for (const auto& entry : selector_action_entries) {
 
-      if (node.OpType() == "Concat") {
+      if (entry->name == "*DQ") {
         LOGS(logger, WARNING) << "Entry: " << entry->name;
         //LOGS(logger, WARNING) << entry->ops_and_versions.find(node.OpType());
         //LOGS(logger, WARNING) << entry->ops_and_versions.find(key);
@@ -123,8 +125,8 @@ static Status MatchAndProcess(
         }
       }
 
-      if (node.OpType() == "Concat") {
-        LOGS(logger, WARNING) << "Supported";
+      if (entry->name == "*DQ") {
+        LOGS(logger, WARNING) << "    Supported version";
       }
 
       auto selection = entry->selector->Select(graph_viewer, node);
@@ -132,13 +134,15 @@ static Status MatchAndProcess(
         continue;
       }
 
-      LOGS(logger, WARNING) << "Has selection";
-      if (node.OpType() == "Concat") {
-        LOGS(logger, WARNING) << "Has selection";
+      if (entry->name == "*DQ") {
+        LOGS(logger, WARNING) << "    Has selection";
       }
 
       node_selection_opt = std::move(selection);
       selector_action_entry_ptr = entry.get();
+      if (!selector_action_entry_ptr) {
+        LOGS(logger, WARNING) << "    No selector_action_entry_ptr";
+      }
       break;
     }
 
@@ -146,9 +150,11 @@ static Status MatchAndProcess(
       break;
     }
 
+    /*
     if (node.OpType() == "Concat") {
       LOGS(logger, WARNING) << "Matched " << node.OpType();
     }
+    */
 
     const auto& selector_action_entry = *selector_action_entry_ptr;
     const auto& action = *selector_action_entry.action;
