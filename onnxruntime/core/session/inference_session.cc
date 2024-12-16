@@ -1676,7 +1676,7 @@ common::Status InferenceSession::Initialize() {
       std::lock_guard<onnxruntime::OrtMutex> initial_guard(session_mutex_);
 
       if (!is_model_loaded_) {
-        LOGS(*session_logger_, ERROR) << "Model was not loaded";
+        LOGS(*session_logger_, WARNING) << "Model was not loaded";
         return common::Status(common::ONNXRUNTIME, common::FAIL, "Model was not loaded.");
       }
 
