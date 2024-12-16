@@ -1862,18 +1862,6 @@ common::Status InferenceSession::Initialize() {
       }
 #endif
 
-    std::cerr << "Start graph search" << std::endl;
-    for (const auto& node : graph.Nodes()) {
-        if (node.Name() == "DequantizeLinear_1012" or node.Name() == "DequantizeLinear_1009") {
-            std::cerr << node.Name() << std::endl;
-        }
-        if (node.InputDefs()[0]->TypeAsProto()->tensor_type().elem_type() == 2) {
-            std::cerr << node.Name() << std::endl;
-        }
-    }
-    std::cerr << "End graph search" << std::endl;
-
-
       // apply any transformations to the main graph and any subgraphs
       ORT_RETURN_IF_ERROR_SESSIONID_(TransformGraph(graph, saving_ort_format));
 
