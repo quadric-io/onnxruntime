@@ -263,6 +263,10 @@ bool VariadicNodeGroupSelector::Check(const GraphViewer& graph_viewer,
 
   // All DQs' inputs and Q's output should have same data type
   int32_t dt_input = dq_nodes[0]->InputDefs()[0]->TypeAsProto()->tensor_type().elem_type();
+
+  std::cerr << dq_nodes.size() << std::endl;
+  std::cerr << dt_input << std::endl;
+
   for (size_t dq_idx = 1; dq_idx < dq_nodes.size(); dq_idx++) {
     if (dt_input != dq_nodes[dq_idx]->InputDefs()[0]->TypeAsProto()->tensor_type().elem_type()) {
       std::cerr << dq_nodes[0]->Name() << std::endl;
