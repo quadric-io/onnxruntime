@@ -266,9 +266,9 @@ bool VariadicNodeGroupSelector::Check(const GraphViewer& graph_viewer,
   for (size_t dq_idx = 1; dq_idx < dq_nodes.size(); dq_idx++) {
     if (dt_input != dq_nodes[dq_idx]->InputDefs()[0]->TypeAsProto()->tensor_type().elem_type()) {
       std::cerr << dq_nodes[0]->Name() << std::endl;
-      std::cerr << dt_input << std::endl;
+      std::cerr << (dq_nodes[0]->InputDefs()[0]->TypeAsProto()->tensor_type().elem_type() == ONNX_NAMESPACE::TensorProto_DataType::TensorProto_DataType_INT8) << std::endl;
       std::cerr << dq_nodes[1]->Name() << std::endl;
-      std::cerr << dq_nodes[dq_idx]->InputDefs()[0]->TypeAsProto()->tensor_type().elem_type() << std::endl;
+      std::cerr << (dq_nodes[dq_idx]->InputDefs()[0]->TypeAsProto()->tensor_type().elem_type() == ONNX_NAMESPACE::TensorProto_DataType::TensorProto_DataType_UINT8) << std::endl;
       return false;
     }
   }
