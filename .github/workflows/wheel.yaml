@@ -42,6 +42,7 @@ jobs:
       with:
         name: ort-wheel-linux
         path: ${{ env.wheel_path }}
+        retention-days: 1
 
   build_and_upload_wheel_mac:
     if: github.repository != 'quadric-io/sdk-cli'
@@ -62,6 +63,7 @@ jobs:
       with:
         name: ort-wheel-mac
         path: ${{ env.wheel_path }}
+        retention-days: 1
 
   create_release:
     permissions:
