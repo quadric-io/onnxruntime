@@ -277,6 +277,7 @@ InlinedVector<std::unique_ptr<GraphTransformer>> GenerateTransformers(
       const bool qdq_is_int8_allowed =
           session_options.config_options.GetConfigOrDefault(kOrtSessionOptionsQDQIsInt8Allowed,
                                                             QDQIsInt8Allowed() ? "1" : "0") == "1";
+      std::cerr << "int8 allowed: " << qdq_is_int8_allowed << std::endl;
       const bool enable_gelu_approximation =
           session_options.config_options.GetConfigOrDefault(kOrtSessionOptionsEnableGeluApproximation, "0") == "1";
 
