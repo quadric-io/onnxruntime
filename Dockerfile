@@ -53,16 +53,14 @@ RUN python3 -m venv .venv && \
 WORKDIR /home/ubuntu
 RUN git clone -b  https://${GITHUB_TOKEN}@github.com/quadric-io/onnxruntime.git
 WORKDIR /home/ubuntu/onnxruntime
-# RUN . /home/ubuntu/.venv/bin/activate && \
-# ./build.sh \
-# --config RelWithDebInfo \
-# --build_shared_lib \
-# --parallel \
-# --compile_no_warning_as_error \
-# --skip_submodule_sync \
-# --allow_running_as_root \
-# --skip_tests \
-# --build_wheel
+RUN . /home/ubuntu/.venv/bin/activate && \
+./build.sh \
+--config RelWithDebInfo \
+--build_shared_lib \
+--parallel \
+--compile_no_warning_as_error \
+--allow_running_as_root \
+--build_wheel
 
 # RUN . /home/ubuntu/.venv/bin/activate && \
 #  pip3 install $(find . -name "*.whl")
