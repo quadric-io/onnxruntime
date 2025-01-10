@@ -62,21 +62,9 @@ RUN . /home/ubuntu/.venv/bin/activate && \
 --allow_running_as_root \
 --build_wheel
 
-# RUN . /home/ubuntu/.venv/bin/activate && \
-#  pip3 install $(find . -name "*.whl")
+RUN . /home/ubuntu/.venv/bin/activate && \
+ pip3 install $(find . -name "*.whl")
 
-# RUN sysctl -w kernel.yama.ptrace_scope=0
+RUN sysctl -w kernel.yama.ptrace_scope=0
 
-# WORKDIR /home/ubuntu
-
-# RUN mkdir -p .vscode && \
-#     cp  /home/ubuntu/fp16_exploration/fp16_ort/launch.json .vscode/launch.json
-
-# RUN git clone https://${GITHUB_TOKEN}@github.com/microsoft/onnxruntime-inference-examples.git
-# RUN git clone https://${GITHUB_TOKEN}@github.com/quadric-io/sdk-cli.git
-
-# Ensure the virtual environment is activated by using a shell
 SHELL ["/bin/bash", "-c"]
-
-# # Set an entry point to activate the virtual environment and run your scripts
-# ENTRYPOINT ["/bin/bash", "-c", ". .venv/bin/activate && python3 your_script.py"]
