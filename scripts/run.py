@@ -1,5 +1,6 @@
 import numpy as np
 import onnxruntime as ort
+import os
 
 def run_qlinearconv_model(onnx_file_path="qlinearconv_model.onnx"):
     # Create an inference session
@@ -21,6 +22,7 @@ def run_qlinearconv_model(onnx_file_path="qlinearconv_model.onnx"):
 
     # Run inference
     output_name = session.get_outputs()[0].name
+    print(os.getpid)
     output_data = session.run([output_name], {input_name: x_data})[0]
 
     # Print shapes and types
