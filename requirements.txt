@@ -8,3 +8,4 @@ torch
 torchvision
 torchaudio
 pillow==9.5.0
+cmake

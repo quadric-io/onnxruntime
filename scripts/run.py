@@ -22,7 +22,7 @@ def run_qlinearconv_model(onnx_file_path="qlinearconv_model.onnx"):
 
     # Run inference
     output_name = session.get_outputs()[0].name
-    print(os.getpid)
+    print(os.getpid())
     output_data = session.run([output_name], {input_name: x_data})[0]
 
     # Print shapes and types
@@ -32,4 +32,4 @@ def run_qlinearconv_model(onnx_file_path="qlinearconv_model.onnx"):
 
 
 if __name__ == "__main__":
-    run_qlinearconv_model("qlinearconv_model.onnx")
+    run_qlinearconv_model("/home/chris/onnxruntime_quadric/scripts/qlinearconv_model.onnx")

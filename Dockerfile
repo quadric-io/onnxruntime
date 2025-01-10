@@ -1,6 +1,8 @@
 # Use the latest Ubuntu image
 FROM ubuntu:latest
 
+RUN sysctl -w kernel.yama.ptrace_scope=0
+
 # Install essential packages
 RUN apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
@@ -40,31 +42,27 @@ ARG GITHUB_TOKEN
 WORKDIR /home/ubuntu
 RUN git clone -b chris-gpnpu-mode https://${GITHUB_TOKEN}@github.com/quadric-io/onnxruntime.git
 
-# Set the working directory
-WORKDIR /home/ubuntu
-
-# Create a virtual environment and install dependencies and create fp32 conv graph
-RUN python3 -m venv .venv && \
-    . /home/ubuntu/.venv/bin/activate && \
+# python setup
+RUN python3 -m venv venv && \
+    . /home/ubuntu/venv/bin/activate && \
     pip3 install --upgrade pip && \
-    pip3 install -r /home/ubuntu/fp16_exploration/fp16_ort/requirements.txt
+    pip3 install -r /home/ubuntu/onnxruntime/requirements.txt && \
+    pip3 install -r /home/ubuntu/onnxruntime/requirements-dev.txt
 
-# onnxruntime
-WORKDIR /home/ubuntu
-RUN git clone -b  https://${GITHUB_TOKEN}@github.com/quadric-io/onnxruntime.git
 WORKDIR /home/ubuntu/onnxruntime
-RUN . /home/ubuntu/.venv/bin/activate && \
+
+RUN . /home/ubuntu/venv/bin/activate && \
 ./build.sh \
 --config RelWithDebInfo \
 --build_shared_lib \
 --parallel \
 --compile_no_warning_as_error \
 --allow_running_as_root \
---build_wheel
+--build_wheel \
+--skip_tests
 
-RUN . /home/ubuntu/.venv/bin/activate && \
+RUN . /home/ubuntu/venv/bin/activate && \
  pip3 install $(find . -name "*.whl")
 
-RUN sysctl -w kernel.yama.ptrace_scope=0
 
 SHELL ["/bin/bash", "-c"]
