@@ -15,6 +15,7 @@ if __name__ == "__main__":
     print(f"Check flag enable_gpnpu: {session.get_session_options().enable_gpnpu}")
     # Inspect the model's input to get the name and shape
     inp_info = session.get_inputs()[0]
+    print(session._sess_options)
     input_name = inp_info.name
     input_shape = inp_info.shape  # e.g. [1, 8, 128, 128]
     print(f"Model input name: {input_name}")

@@ -1,0 +1,74 @@
+Status InferenceSession::Run(const RunOptions& run_options,
+                             gsl::span<const std::string> feed_names, gsl::span<const OrtValue> feeds,
+                             gsl::span<const std::string> output_names, std::vector<OrtValue>* p_fetches,
+                             const std::vector<OrtDevice>* p_fetches_device_info)
+
+common::Status ExecuteGraph(const SessionState& session_state,
+                            FeedsFetchesManager& feeds_fetches_manager,
+                            gsl::span<const OrtValue> feeds, std::vector<OrtValue>& fetches,
+                            ExecutionMode execution_mode, const bool& terminate_flag,
+                            const logging::Logger& logger,
+#ifdef ORT_ENABLE_STREAM
+                            DeviceStreamCollectionHolder& device_stream_collection_holder,
+#endif
+                            bool only_execute_path_to_fetches,
+                            Stream* parent_stream)
+
+static common::Status
+ExecuteGraphImpl(const SessionState& session_state,
+                 const FeedsFetchesManager& feeds_fetches_manager,
+                 gsl::span<const OrtValue> feeds, std::vector<OrtValue>& fetches,
+                 const std::unordered_map<size_t, IExecutor::CustomAllocator>& fetch_allocators,
+                 ExecutionMode execution_mode, const bool& terminate_flag,
+                 const logging::Logger& logger,
+#ifdef ORT_ENABLE_STREAM
+                 DeviceStreamCollection* device_stream_collection,
+#endif
+                 const bool only_execute_path_to_fetches = false,
+                 Stream* parent_stream = nullptr)
+
+onnxruntime::Status ExecuteThePlan(const SessionState& session_state, gsl::span<const int> feed_mlvalue_idxs,
+                                   gsl::span<const OrtValue> feeds, gsl::span<const int> fetch_mlvalue_idxs,
+                                   std::vector<OrtValue>& fetches,
+                                   const std::unordered_map<size_t, IExecutor::CustomAllocator>& fetch_allocators,
+                                   const logging::Logger& logger,
+#ifdef ORT_ENABLE_STREAM
+                                   const DeviceStreamCollection* device_streams,
+#endif
+                                   const bool& terminate_flag,
+                                   const bool only_execute_path_to_fetches,
+                                   bool single_thread_mode)
+
+void RunSince(size_t stream_idx, StreamExecutionContext& ctx, SessionScope& session_scope, const bool& terminate_flag, size_t since)
+
+Status LaunchKernelStep::Execute(StreamExecutionContext& ctx,
+                                 size_t stream_idx,
+                                 SessionScope& session_scope,
+                                 const bool& terminate_flag,
+                                 bool& continue_flag)
+
+onnxruntime::Status ExecuteKernel(StreamExecutionContext& ctx,
+                                  NodeIndex idx,
+                                  size_t stream_idx,
+                                  const bool& terminate_flag,
+                                  SessionScope& session_scope)
+
+Status QLinearConv<ActType>::Compute(OpKernelContext* context)
+
+template <typename OutputType>
+void
+MLASCALL
+MlasRequantizeOutput(
+    const int32_t* Input,
+    size_t InputLeadingDimension,
+    OutputType* Output,
+    size_t OutputLeadingDimension,
+    const int32_t* Bias,
+    const float* Scale,
+    bool PerColumnScale,
+    OutputType ZeroPoint,
+    size_t StartM,
+    size_t StartN,
+    size_t CountM,
+    size_t CountN
+    )
