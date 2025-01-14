@@ -973,7 +973,7 @@ Status QLinearConv<ActType>::Compute(OpKernelContext* context) const {
           }
         }
       }
-
+      // takenote
       MlasRequantizeOutput(
           worker_gemm_output,
           static_cast<size_t>(M),

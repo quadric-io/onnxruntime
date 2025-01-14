@@ -452,6 +452,8 @@ class InferenceSession(Session):
 
         self._sess_options = sess_options
         self._sess_options_initial = sess_options
+        print("here???")
+        # print(sess_options.gpnpu_mode)
         self._enable_fallback = True
         if "read_config_from_model" in kwargs:
             self._read_config_from_model = int(kwargs["read_config_from_model"]) == 1
