@@ -523,6 +523,8 @@ Status QLinearConv<ActType>::Compute(OpKernelContext* context) const {
   // Test to see if we have access to enable_gpnpu flag
   const bool gpnpu_flag = session_options.enable_gpnpu;
 
+  std::cout << "Check enable_gpnpu from qlinearconv.cc: " << gpnpu_flag << std::endl;
+
   const Tensor* X = context->Input<Tensor>(InputTensors::IN_X);
   const Tensor* W = is_W_packed_ ? nullptr : context->Input<Tensor>(InputTensors::IN_W);
   const auto& W_shape = W ? W->Shape() : W_shape_;
@@ -983,8 +985,9 @@ Status QLinearConv<ActType>::Compute(OpKernelContext* context) const {
           }
         }
       }
-      // Pass gpnpu_flag here to where the float math is happening
-      MlasRequantizeOutput(
+      if (gpnpu_flag) {
+        // New MlasRequantizeOuput but for fixed point not floating point
+        MlasRequantizeOutputFixedPoint(
           worker_gemm_output,
           static_cast<size_t>(M),
           worker_output,
@@ -997,6 +1000,21 @@ Status QLinearConv<ActType>::Compute(OpKernelContext* context) const {
           0,
           static_cast<size_t>(output_count),
           static_cast<size_t>(M));
+      } else {
+        MlasRequantizeOutput(
+          worker_gemm_output,
+          static_cast<size_t>(M),
+          worker_output,
+          static_cast<size_t>(M),
+          Bdata,
+          output_scales.data(),
+          output_scales.size() > 1,
+          Y_zero_point_value,
+          0,
+          0,
+          static_cast<size_t>(output_count),
+          static_cast<size_t>(M));
+      }
     };
 
     concurrency::ThreadPool::TrySimpleParallelFor(thread_pool, onnxruntime::narrow<ptrdiff_t>(task_count), conv_worker);

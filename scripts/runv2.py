@@ -7,15 +7,17 @@ if __name__ == "__main__":
     onnx_file_path="/home/chris/onnxruntime_quadric/scripts/qlinearconv_model.onnx"
 
     session_options = ort.SessionOptions()
-    session_options.enable_gpnpu = False
+    session_options.enable_gpnpu = True
     print(f"Flag enable_gpnpu: {session_options.enable_gpnpu}")
 
     # Create an inference session
-    session = ort.InferenceSession(onnx_file_path, sess_options=session_options, providers=["CPUExecutionProvider"])
-    print(f"Check flag enable_gpnpu: {session.get_session_options().enable_gpnpu}")
+    session1 = ort.InferenceSession(onnx_file_path, sess_options=session_options, providers=["CPUExecutionProvider"])
+    print(f"Check flag 1 enable_gpnpu: {session1.get_session_options().enable_gpnpu}")
+    session_options.enable_gpnpu = False
+    session2 = ort.InferenceSession(onnx_file_path, sess_options=session_options, providers=["CPUExecutionProvider"])
+
     # Inspect the model's input to get the name and shape
-    inp_info = session.get_inputs()[0]
-    print(session._sess_options)
+    inp_info = session1.get_inputs()[0]
     input_name = inp_info.name
     input_shape = inp_info.shape  # e.g. [1, 8, 128, 128]
     print(f"Model input name: {input_name}")
@@ -29,11 +31,13 @@ if __name__ == "__main__":
     )
 
     # Run inference
-    output_name = session.get_outputs()[0].name
-    print(os.getpid())
-    output_data = session.run([output_name], {input_name: x_data})[0]
+    output_name1 = session1.get_outputs()[0].name
+    output_data1 = session1.run([output_name1], {input_name: x_data})[0]
+    output_name2 = session2.get_outputs()[0].name
+    output_data2 = session2.run([output_name2], {input_name: x_data})[0]
 
     # Print shapes and types
-    print(f"Input data shape: {x_data.shape}, dtype: {x_data.dtype}")
-    print(f"Output data shape: {output_data.shape}, dtype: {output_data.dtype}")
-    print("Output data (truncated):\n", output_data.flatten()[:50], "...\n")
+    # print(f"Input data shape: {x_data.shape}, dtype: {x_data.dtype}")
+    # print(f"Output data shape: {output_data.shape}, dtype: {output_data.dtype}")
+    print("Output data 1 (truncated):\n", output_data1.flatten()[:50], "...\n")
+    print("Output data 2 (truncated):\n", output_data2.flatten()[:50], "...\n")
