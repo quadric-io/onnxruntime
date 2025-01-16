@@ -92,6 +92,7 @@ MlasQuantizeLinearVector(
     return IntegerVector;
 }
 
+// Copying logic from fxRoundPosInf in cgc_ccl.hpp for custom round
 template <uint8_t aFracBits>
 inline int32_t customRound(const int32_t a) {
     const int32_t zp5 = 1 << (aFracBits - 1);
@@ -2224,7 +2225,7 @@ MlasRequantizeOutputFixedPoint(
             int32_t IntegerValue = *RowInput++;
 
             if (bias != nullptr) {
-                IntegerValue += *bias++;
+               IntegerValue += *bias++;
             }
 
             int32_t ScaleValue = PerColumnScale ? *fpscale++ : PerMatrixScaleValue;
@@ -2233,11 +2234,13 @@ MlasRequantizeOutputFixedPoint(
             std::vector<float> ScaleValueVec = {*Scale};  // Create single-element vector
             auto p = dataToQfp(ScaleValueVec, -1, 32, false); // Returns std::make_pair(qfp, fracBits)
             int fracBits = p.second;
+            int mulScale = fracBits - 2;
 
             // std::cout << "\nFractional bits: " << fracBits << std::endl;
-
-            IntegerValue *= ScaleValue; // This is a 29 fixed point
-            IntegerValue = customRound<2>(IntegerValue);
+            int64_t largeInt = IntegerValue * ScaleValue;
+            // IntegerValue *= ScaleValue; // This is a 29 fixed point
+            largeInt = largeInt >> mulScale;
+            IntegerValue = customRound<2>(static_cast<int32_t>(largeInt));
             int32_t Intermediate = IntegerValue + ZeroPoint;
             Intermediate = std::max(Intermediate, MinimumValue);
             Intermediate = std::min(Intermediate, MaximumValue);
