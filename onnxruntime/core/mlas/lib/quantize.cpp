@@ -2189,7 +2189,6 @@ MlasRequantizeOutputFixedPoint(
     int fractional_bits = 31;
     int64_t* fpScale = new int64_t;
     *fpScale = static_cast<int64_t>(*Scale * (1LL << fractional_bits));
-    std::cout << "Fixed-point after conversion: " << *fpScale << std::endl;
 
 
     const int32_t PerMatrixScaleValue = PerColumnScale ? 0 : *fpScale;
@@ -2236,9 +2235,7 @@ MlasRequantizeOutputFixedPoint(
             int fracBits = p.second;
             int mulScale = fracBits - 2;
 
-            // std::cout << "\nFractional bits: " << fracBits << std::endl;
-            int64_t largeInt = static_cast<int64_t>(IntegerValue) * ScaleValue;
-            // IntegerValue *= ScaleValue; // This is a 29 fixed point
+            int64_t largeInt = static_cast<int64_t>(IntegerValue) * ScaleValue; // This is a 29 fixed point
             largeInt = largeInt >> mulScale;
             IntegerValue = customRound<2>(static_cast<int32_t>(largeInt));
             int32_t Intermediate = IntegerValue + ZeroPoint;
