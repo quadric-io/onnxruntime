@@ -523,8 +523,6 @@ Status QLinearConv<ActType>::Compute(OpKernelContext* context) const {
   // Test to see if we have access to enable_gpnpu flag
   const bool gpnpu_flag = session_options.enable_gpnpu;
 
-  std::cout << "Check enable_gpnpu from qlinearconv.cc: " << gpnpu_flag << std::endl;
-
   const Tensor* X = context->Input<Tensor>(InputTensors::IN_X);
   const Tensor* W = is_W_packed_ ? nullptr : context->Input<Tensor>(InputTensors::IN_W);
   const auto& W_shape = W ? W->Shape() : W_shape_;
