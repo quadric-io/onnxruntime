@@ -37,7 +37,17 @@ if __name__ == "__main__":
     output_data2 = session2.run([output_name2], {input_name: x_data})[0]
 
     # Print shapes and types
-    # print(f"Input data shape: {x_data.shape}, dtype: {x_data.dtype}")
-    # print(f"Output data shape: {output_data.shape}, dtype: {output_data.dtype}")
+    print(f"Input data shape: {x_data.shape}, dtype: {x_data.dtype}")
+    print(f"Output data shape: {output_data1.shape}, dtype: {output_data1.dtype}")
     print("Output data 1 (truncated):\n", output_data1.flatten()[:50], "...\n")
     print("Output data 2 (truncated):\n", output_data2.flatten()[:50], "...\n")
+
+    BATCH_SIZE = 1
+    CHANNELS = 64
+    HEIGHT = 128
+    WIDTH = 128
+    difference = output_data1 - output_data2
+
+    # Print some of the differences to verify
+    print("Element-wise differences:")
+    print(np.sum(difference))
