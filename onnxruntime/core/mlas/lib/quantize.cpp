@@ -2187,8 +2187,8 @@ MlasRequantizeOutputFixedPoint(
     // Floating point conversion to fixed point is multiply by 2**n where n is the number of decimal places
     // Then, interpret this number as a 32 bit int
     int fractional_bits = 31;
-    int32_t* fpScale = new int32_t;
-    *fpScale = static_cast<int32_t>(*Scale * (1LL << fractional_bits));
+    int64_t* fpScale = new int64_t;
+    *fpScale = static_cast<int64_t>(*Scale * (1LL << fractional_bits));
     std::cout << "Fixed-point after conversion: " << *fpScale << std::endl;
 
 
@@ -2214,7 +2214,7 @@ MlasRequantizeOutputFixedPoint(
     while (CountM-- > 0) {
 
         const int32_t* bias = Bias;
-        const int32_t* fpscale = fpScale;
+        const int64_t* fpscale = fpScale;
         size_t n = CountN;
 
         auto* RowInput = Input;
@@ -2228,7 +2228,7 @@ MlasRequantizeOutputFixedPoint(
                IntegerValue += *bias++;
             }
 
-            int32_t ScaleValue = PerColumnScale ? *fpscale++ : PerMatrixScaleValue;
+            int64_t ScaleValue = PerColumnScale ? *fpscale++ : PerMatrixScaleValue;
 
             // Need to wrap into vector to use function scalarToQfp
             std::vector<float> ScaleValueVec = {*Scale};  // Create single-element vector
@@ -2237,7 +2237,7 @@ MlasRequantizeOutputFixedPoint(
             int mulScale = fracBits - 2;
 
             // std::cout << "\nFractional bits: " << fracBits << std::endl;
-            int64_t largeInt = IntegerValue * ScaleValue;
+            int64_t largeInt = static_cast<int64_t>(IntegerValue) * ScaleValue;
             // IntegerValue *= ScaleValue; // This is a 29 fixed point
             largeInt = largeInt >> mulScale;
             IntegerValue = customRound<2>(static_cast<int32_t>(largeInt));
