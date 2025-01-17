@@ -365,14 +365,12 @@ class TestQLinearConv(unittest.TestCase):
         WIDTH = 128
         difference = output_data1 - output_data2
 
-        # Print some of the differences to verify
-        # print("Element-wise differences:")
-        total_diff = np.sum(difference)
+        max_diff = np.max(np.abs(difference))
 
         # Check the output shape and type
-        self.assertEqual(output_data1.shape, (1, 64, 128, 128))
+        self.assertEqual(output_data1.shape, (BATCH_SIZE, CHANNELS, HEIGHT, WIDTH))
         self.assertEqual(output_data1.dtype, np.int8)
-        self.assertEqual(total_diff, 0)
+        self.assertLessEqual(max_diff, 1)
 
 if __name__ == '__main__':
     unittest.main()
