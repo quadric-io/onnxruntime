@@ -1410,6 +1410,23 @@ MlasQLinearAdd(
 template<typename DataType>
 void
 MLASCALL
+MlasQLinearAddFixedPoint(
+    const DataType* InputA,
+    float ScaleA,
+    int32_t ZeroPointA,
+    const DataType* InputB,
+    float ScaleB,
+    int32_t ZeroPointB,
+    float ScaleC,
+    int32_t ZeroPointC,
+    DataType* OutputC,
+    size_t N,
+    bool IsScalarB
+    );
+
+template<typename DataType>
+void
+MLASCALL
 MlasQLinearMul(
     const DataType* InputA,
     float ScaleA,
