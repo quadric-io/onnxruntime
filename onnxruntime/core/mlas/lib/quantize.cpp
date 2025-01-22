@@ -35,6 +35,8 @@ Abstract:
 
 #include <type_traits>
 
+#include "qfunctions_helper.h"
+
 //
 // QuantizeLinear implementation using NEON or SSE2 intrinsics.
 //
