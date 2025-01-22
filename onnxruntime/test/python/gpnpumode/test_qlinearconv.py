@@ -10,6 +10,11 @@ import onnx
 import onnxruntime as ort
 from onnx import helper, TensorProto
 import os
+import sys
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from helper import get_onnx_const, generate_normal_inputs
 
 x_scale, x_zp = 0.018654844, -14
 w_scale, w_zp = 0.044774472, 0
@@ -49,9 +54,6 @@ def conv_output_height_width(kernel, strides, padding, dilation, input_dims):
         (input_dims[1] + padding[1] + padding[3] - dilation[1] * (kernel[1] - 1) - 1) // strides[1]
         + 1
     )
-
-def generate_normal_inputs(shape, dtype, mu=0, sigma=32, a_min=-127, a_max=127):
-    return np.clip(np.rint(np.random.normal(mu, sigma, shape)).astype(dtype), a_min, a_max)
 
 def get_onnx_linear_conv(
     op_name,
@@ -152,18 +154,6 @@ def get_onnx_linear_conv(
         )
 
     return conv, out, initializers
-
-def get_onnx_const(name, val, dtype=None):
-    if isinstance(val, np.ndarray):
-        dtype = onnx.mapping.NP_TYPE_TO_TENSOR_TYPE[val.dtype]
-        dims = val.shape
-    else:
-        if not dtype:
-            dtype = onnx.TensorProto.INT8 if isinstance(val, int) else onnx.TensorProto.FLOAT
-        dims = ()
-        val = [val]
-
-    return onnx.helper.make_tensor(name=name, data_type=dtype, dims=dims, vals=val)
 
 def get_onnx(
     h,
@@ -312,18 +302,6 @@ class TestQLinearConv(unittest.TestCase):
 
         # Run inference
         session = ort.InferenceSession(self.model_path, providers=["CPUExecutionProvider"])
-        # output = session.run(
-        #     ['conv_0.output'],
-        #     {
-        #         'inp': input_data,
-        #         'conv_0.x_scale': input_scale,
-        #         'conv_0.x_zp': input_zero_point,
-        #         'conv_0.w_scale': weight_scale,
-        #         'conv_0.w_zp': weight_zero_point,
-        #         'conv_0.y_scale': output_scale,
-        #         'conv_0.y_zp': output_zero_point
-        #     }
-        # )[0]
 
         session_options = ort.SessionOptions()
         session_options.enable_gpnpu = True
@@ -352,12 +330,6 @@ class TestQLinearConv(unittest.TestCase):
         output_data1 = session1.run([output_name1], {input_name: x_data})[0]
         output_name2 = session2.get_outputs()[0].name
         output_data2 = session2.run([output_name2], {input_name: x_data})[0]
-
-        # Print shapes and types
-        # print(f"Input data shape: {x_data.shape}, dtype: {x_data.dtype}")
-        # print(f"Output data shape: {output_data1.shape}, dtype: {output_data1.dtype}")
-        # print("Output data 1 (truncated):\n", output_data1.flatten()[:50], "...\n")
-        # print("Output data 2 (truncated):\n", output_data2.flatten()[:50], "...\n")
 
         BATCH_SIZE = 1
         CHANNELS = 64

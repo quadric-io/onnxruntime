@@ -159,13 +159,13 @@ MlasQLinearAddKernelRawHelperFixedPoint(
 {
     int dequant_frac_bits = 16; // hard coded in tvm python
 
-    std::vector<float> ScaleValueVecA = {ScaleA/ScaleC};  // Create single-element vector
+    std::vector<double> ScaleValueVecA = {ScaleA/ScaleC};  // Create single-element vector
     auto pairA = dataToQfp(ScaleValueVecA, -1, 32, false); // Returns std::make_pair(qfp, fracBits)
     int fracBitsA = pairA.second;
     int mulScaleA = fracBitsA - dequant_frac_bits;
     int64_t* fpScaleA = new int64_t;
 
-    std::vector<float> ScaleValueVecB = {ScaleB/ScaleC};  // Create single-element vector
+    std::vector<double> ScaleValueVecB = {ScaleB/ScaleC};  // Create single-element vector
     auto pairB = dataToQfp(ScaleValueVecB, -1, 32, false); // Returns std::make_pair(qfp, fracBits)
     int fracBitsB = pairB.second;
     int mulScaleB = fracBitsB - dequant_frac_bits;

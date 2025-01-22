@@ -8,34 +8,29 @@
 #include <iterator>
 #include <type_traits>
 
-// template <uint8_t aFracBits>
-// int32_t customRound(const int32_t a);
-
 // Copying logic from fxRoundPosInf in cgc_ccl.hpp for custom round
 template <uint8_t aFracBits>
 inline int32_t customRound(const int32_t a) {
     const int32_t zp5 = 1 << (aFracBits - 1);
     return (a + zp5) >> aFracBits;
 }
-// template <typename T>
-// std::pair<std::vector<int>, int> dataToQfp(const std::vector<T>& data, int param1, int param2, bool param3);
 
 // Function to derive fractional bits
-int deriveFractionalBits(float scalar, int qfpSize);
+int deriveFractionalBits(double scalar, int qfpSize);
 
 // Function to convert scalar to qfp
-int scalarToQfp(float value, int fracBits);
+int scalarToQfp(double value, int fracBits);
 
 // Function to convert data to qfp
 template <typename T>
 std::pair<std::vector<int>, int> dataToQfp(
     const std::vector<T>& data, int fracBits = -1, int qfpSize = 32, bool scalarAsFloat = true
 ) {
-    auto deriveFractionalBits = [qfpSize](float scalar) {
+    auto deriveFractionalBits = [qfpSize](double scalar) {
         int valueBits = qfpSize - 1;
 
-        float intPart;
-        ::modff(scalar, &intPart);
+        double intPart;
+        ::modf(scalar, &intPart);
         intPart = std::abs(intPart);
 
         int intBits = (intPart == 0) ? 0 : static_cast<int>(std::log2f(intPart)) + 1;
@@ -46,9 +41,9 @@ std::pair<std::vector<int>, int> dataToQfp(
         return fracBits;
     };
 
-    auto scalarToQfp = [](float value, int fracBits) {
-        float frac, integer;
-        frac = ::modff(value, &integer);
+    auto scalarToQfp = [](double value, int fracBits) {
+        double frac, integer;
+        frac = ::modf(value, &integer);
 
         integer = static_cast<int>(std::abs(integer)) << fracBits;
         frac = std::roundf(std::abs(frac) * (1 << fracBits));
