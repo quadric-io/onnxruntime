@@ -47,33 +47,29 @@ class TestQGemm(unittest.TestCase):
         output_zp_name = "output_zero_point"
         output_name = "output"
 
-        a_sc = get_onnx_const(input_a_scale_name, a_scale)
-        a_zp = get_onnx_const(input_a_zp_name, a_zero_point)
-        b_sc = get_onnx_const(input_b_scale_name, b_scale)
-        b_zp = get_onnx_const(input_b_zp_name, b_zero_point)
-        y_sc = get_onnx_const(output_scale_name, y_scale)
-        y_zp = get_onnx_const(output_zp_name, y_zero_point)
-
-
-        # a = np.random.ranf([4608, 2040]).astype(np.float32)
-        # b = np.random.ranf([1024, 4608]).astype(np.float32)
-        # c = np.random.ranf([1, 5]).astype(np.float32)
-
+        a_sc = get_onnx_const(input_a_scale_name, a_scale, TensorProto.FLOAT)
+        a_zp = get_onnx_const(input_a_zp_name, a_zero_point, TensorProto.INT8)
+        b_sc = get_onnx_const(input_b_scale_name, b_scale, TensorProto.FLOAT)
+        b_zp = get_onnx_const(input_b_zp_name, b_zero_point, TensorProto.INT8)
+        y_sc = get_onnx_const(output_scale_name, y_scale, TensorProto.FLOAT)
+        y_zp = get_onnx_const(output_zp_name, y_zero_point, TensorProto.INT8)
         # Define input and output tensors
         input_a_tensor = helper.make_tensor_value_info(input_a_name, TensorProto.INT8, [4608, 2040])
-        # b = get_onnx_const(input_b_name, generate_normal_inputs(input_shape, np.int8, 0, 32))
-        input_b_tensor = helper.make_tensor_value_info(input_b_name, TensorProto.INT8, [1024, 4608])
-        output_tensor = helper.make_tensor_value_info(output_name, TensorProto.INT8, [1024, 2040])
+        output_tensor = helper.make_tensor_value_info("out", TensorProto.INT8, [1024, 2040])
+        b = get_onnx_const(input_b_name, generate_normal_inputs([1024, 4608], np.int8, 0, 32))
+        y = get_onnx_const(output_name, generate_normal_inputs([1024, ], np.int32, 0, 32))
 
+        y_sc = TensorProto("")
+        y_zp = TensorProto("")
         # Create QLinearAdd node
         qlinear_add_node = onnx.helper.make_node(
             "QGemm",
             inputs=[input_a_name, input_a_scale_name, input_a_zp_name,
                 input_b_name, input_b_scale_name, input_b_zp_name,
+                output_name,
                 output_scale_name, output_zp_name],
-            outputs=[output_name],
-            alpha=0.25,
-            beta=0.35,
+            outputs=["out"],
+            alpha=0.5,
             transA=1,
             transB=1,
             domain="com.microsoft"
@@ -86,7 +82,7 @@ class TestQGemm(unittest.TestCase):
             graph_name,
             [input_a_tensor],
             [output_tensor],
-            initializer=[a_sc, a_zp, b, b_sc, b_zp, y_sc, y_zp],
+            initializer=[a_sc, a_zp, b, b_sc, b_zp, y, y_sc, y_zp],
         )
 
         # Create model
@@ -158,7 +154,7 @@ class TestQGemm(unittest.TestCase):
         max_diff = np.max(np.abs(difference))
 
         # Check the output shape and type
-        self.assertEqual(output_data1.shape, (batch_size, channels, h, w))
+        self.assertEqual(output_data1.shape, (2040,1024))
         self.assertEqual(output_data1.dtype, np.int8)
         self.assertLessEqual(max_diff, 1)
 

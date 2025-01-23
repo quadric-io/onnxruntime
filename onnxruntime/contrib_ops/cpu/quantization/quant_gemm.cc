@@ -18,6 +18,14 @@ class QGemm : protected GemmBase, public MatMulIntegerBase {
   }
 
   Status Compute(OpKernelContext* context) const override {
+    auto* internal_context = dynamic_cast<OpKernelContextInternal*>(context);
+    if (!internal_context) {
+        return Status(common::ONNXRUNTIME, common::FAIL, "Failed to cast OpKernelContext to OpKernelContextInternal");
+    }
+    const auto& session_options = internal_context->GetSessionState().GetSessionOptions();
+    // Test to see if we have access to enable_gpnpu flag
+    const bool gpnpu_flag = session_options.enable_gpnpu;
+
     const auto* a = context->Input<Tensor>(IN_A);
     const auto* b = packed_b_ ? nullptr : context->Input<Tensor>(IN_B);
     const auto& b_shape = b ? b->Shape() : b_shape_;
@@ -106,10 +114,14 @@ class QGemm : protected GemmBase, public MatMulIntegerBase {
     gemm_param.PerColumnZeroPoints = !IsScalarOr1ElementVector(b_zp);
 
     std::vector<float> output_scales = ComputeOutputScale(a_scale, b_scale, y_scale);
-    std::optional<MLAS_QGEMM_SCALE_BIAS_OUTPUT_PROCESSOR> scale_bias_proc_ptr;
-    std::optional<MLAS_QGEMM_REQUANT_OUTPUT_PROCESSOR> requant_proc_ptr;
+    if (gpnpu_flag) {
+      std::optional<MLAS_QGEMM_REQUANT_OUTPUT_PROCESSOR_FIXEDPOINT> requant_proc_ptr;
+      std::optional<MLAS_QGEMM_SCALE_BIAS_OUTPUT_PROCESSOR_FIXEDPOINT> scale_bias_proc_ptr;
+    } else {
+      std::optional<MLAS_QGEMM_REQUANT_OUTPUT_PROCESSOR> requant_proc_ptr;
+      std::optional<MLAS_QGEMM_SCALE_BIAS_OUTPUT_PROCESSOR> scale_bias_proc_ptr;
+    }
     SetPostProcessor(y_zp, N, output_scales, y, gemm_param, scale_bias_proc_ptr, requant_proc_ptr);
-
     MlasGemmBatch(gemm_shape, &gemm_param, 1, context->GetOperatorThreadPool());
     return Status::OK();
   }
