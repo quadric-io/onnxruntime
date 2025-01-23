@@ -1,6 +1,7 @@
 import numpy as np
 import onnxruntime as ort
 import os
+import time
 
 def run_qlinearadd_model(onnx_file_path="correct_qlinear_add.onnx"):
     session_options = ort.SessionOptions()
@@ -38,10 +39,14 @@ def run_qlinearadd_model(onnx_file_path="correct_qlinear_add.onnx"):
     # Run inference
     output_name1 = session1.get_outputs()[0].name
     print(f"Process ID: {os.getpid()}")
+    t1 = time.time()
     output_data1 = session1.run([output_name1], input_dict)[0]
+    t2 = time.time()
     output_name2 = session2.get_outputs()[0].name
     print(f"Process ID: {os.getpid()}")
+    t3 = time.time()
     output_data2 = session2.run([output_name2], input_dict)[0]
+    t4 = time.time()
 
     # Print shapes and types
     print(f"Input A data shape: {x_data_a.shape}, dtype: {x_data_a.dtype}")
@@ -52,6 +57,8 @@ def run_qlinearadd_model(onnx_file_path="correct_qlinear_add.onnx"):
     difference = output_data1 - output_data2
     max_diff = np.max(np.abs(difference))
     print(max_diff)
+    print("CPU", t2-t1)
+    print("GPNPU", t4-t3)
 
 if __name__ == "__main__":
     run_qlinearadd_model("/home/maggies/onnxruntime/qlinearadd/output.onnx")

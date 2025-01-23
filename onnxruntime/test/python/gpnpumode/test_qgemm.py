@@ -22,13 +22,13 @@ h=128
 w=128
 channels=8
 
-class TestQLinearAdd(unittest.TestCase):
+class TestQGemm(unittest.TestCase):
     def setUp(self):
         # Create a specific ONNX model with a single QLinearConv node
-        self.model_path = "qlinearadd_model.onnx"
-        self.create_qlinearadd_model(self.model_path)
+        self.model_path = "qgemm_model.onnx"
+        self.create_qgemm_model(self.model_path)
 
-    def create_qlinearadd_model(self, output_model_path):
+    def create_qgemm_model(self, output_model_path):
         a_scale, a_zero_point = 0.2039528638124466, -14
         b_scale, b_zero_point = 0.003937007859349251, 0
         y_scale, y_zero_point = 0.1019764319062233, -6
@@ -56,15 +56,23 @@ class TestQLinearAdd(unittest.TestCase):
 
         # Create QLinearAdd node
         qlinear_add_node = onnx.helper.make_node(
-            "QLinearAdd",
-            inputs=[
-                input_a_name, input_a_scale_name, input_a_zp_name,
-                input_b_name, input_b_scale_name, input_b_zp_name,
-                output_scale_name, output_zp_name
-            ],
-            outputs=[output_name],
+            "QGemm",
+            inputs=["a", "b", "c"],
+            outputs=["y"],
+            alpha=0.25,
+            beta=0.35,
+            transA=1,
+            transB=1,
             domain="com.microsoft"
         )
+        a = np.random.ranf([4, 3]).astype(np.float32)
+        b = np.random.ranf([5, 4]).astype(np.float32)
+        c = np.random.ranf([1, 5]).astype(np.float32)
+        y = gemm_reference_implementation(
+            a, b, c, transA=1, transB=1, alpha=0.25, beta=0.35
+        )
+        expect(node, inputs=[a, b, c], outputs=[y], name="test_gemm_all_attributes")
+
 
         # Define input and output tensors
         input_a_tensor = helper.make_tensor_value_info(input_a_name, TensorProto.INT8, input_shape)

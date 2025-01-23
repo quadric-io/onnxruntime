@@ -11,6 +11,7 @@ import onnxruntime as ort
 from onnx import helper, TensorProto
 import os
 import sys
+import time
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -327,9 +328,16 @@ class TestQLinearConv(unittest.TestCase):
 
         # Run inference
         output_name1 = session1.get_outputs()[0].name
+        t1 = time.time()
         output_data1 = session1.run([output_name1], {input_name: x_data})[0]
+        t2 = time.time()
         output_name2 = session2.get_outputs()[0].name
+        t3 = time.time()
         output_data2 = session2.run([output_name2], {input_name: x_data})[0]
+        t4 = time.time()
+        print("CPU      ", t2-t1)
+        print("GPNPU    ", t4-t3)
+
 
         BATCH_SIZE = 1
         CHANNELS = 64
