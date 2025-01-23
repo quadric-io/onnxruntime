@@ -24,7 +24,7 @@ channels=8
 
 class TestQGemm(unittest.TestCase):
     def setUp(self):
-        # Create a specific ONNX model with a single QLinearConv node
+        # Create a specific ONNX model with a single QGemm node
         self.model_path = "qgemm_model.onnx"
         self.create_qgemm_model(self.model_path)
 
@@ -54,31 +54,30 @@ class TestQGemm(unittest.TestCase):
         y_sc = get_onnx_const(output_scale_name, y_scale)
         y_zp = get_onnx_const(output_zp_name, y_zero_point)
 
+
+        # a = np.random.ranf([4608, 2040]).astype(np.float32)
+        # b = np.random.ranf([1024, 4608]).astype(np.float32)
+        # c = np.random.ranf([1, 5]).astype(np.float32)
+
+        # Define input and output tensors
+        input_a_tensor = helper.make_tensor_value_info(input_a_name, TensorProto.INT8, [4608, 2040])
+        # b = get_onnx_const(input_b_name, generate_normal_inputs(input_shape, np.int8, 0, 32))
+        input_b_tensor = helper.make_tensor_value_info(input_b_name, TensorProto.INT8, [1024, 4608])
+        output_tensor = helper.make_tensor_value_info(output_name, TensorProto.INT8, [1024, 2040])
+
         # Create QLinearAdd node
         qlinear_add_node = onnx.helper.make_node(
             "QGemm",
-            inputs=["a", "b", "c"],
-            outputs=["y"],
+            inputs=[input_a_name, input_a_scale_name, input_a_zp_name,
+                input_b_name, input_b_scale_name, input_b_zp_name,
+                output_scale_name, output_zp_name],
+            outputs=[output_name],
             alpha=0.25,
             beta=0.35,
             transA=1,
             transB=1,
             domain="com.microsoft"
         )
-        a = np.random.ranf([4, 3]).astype(np.float32)
-        b = np.random.ranf([5, 4]).astype(np.float32)
-        c = np.random.ranf([1, 5]).astype(np.float32)
-        y = gemm_reference_implementation(
-            a, b, c, transA=1, transB=1, alpha=0.25, beta=0.35
-        )
-        expect(node, inputs=[a, b, c], outputs=[y], name="test_gemm_all_attributes")
-
-
-        # Define input and output tensors
-        input_a_tensor = helper.make_tensor_value_info(input_a_name, TensorProto.INT8, input_shape)
-        b = get_onnx_const(input_b_name, generate_normal_inputs(input_shape, np.int8, 0, 32))
-        input_b_tensor = helper.make_tensor_value_info(input_b_name, TensorProto.INT8, input_shape)
-        output_tensor = helper.make_tensor_value_info(output_name, TensorProto.INT8, input_shape)
 
         # Create graph
         graph_name = "com.microsoft.QLinearAdd_test"
