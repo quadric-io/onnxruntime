@@ -1486,6 +1486,39 @@ MlasQLinearGlobalAveragePoolNhwc(
     const T8Bits* ZeroBuffer
     );
 
+template<typename T8Bits>
+void
+MLASCALL
+MlasQLinearGlobalAveragePoolNchwFixedPoint(
+    const T8Bits* Input,
+    float ScaleInput,
+    int32_t ZeroPointInput,
+    T8Bits* Output,
+    float ScaleOutput,
+    int32_t ZeroPointOutput,
+    size_t Channels,
+    size_t ImageSize,
+    int32_t* AccumulateBuffer
+    );
+
+template <typename T8Bits>
+void
+MLASCALL
+MlasQLinearGlobalAveragePoolNhwcFixedPoint(
+    const T8Bits* Input,
+    float ScaleInput,
+    int32_t ZeroPointInput,
+    T8Bits* Output,
+    float ScaleOutput,
+    int32_t ZeroPointOutput,
+    size_t Batch,
+    size_t ImageSize,
+    size_t Stride,
+    size_t Channels,
+    int32_t* AccumulateBuffer,
+    const T8Bits* ZeroBuffer
+    );
+
 //
 // InputA is of size N,
 // Input B is of size 1 if IsScalarB == true, otherwise it is of size N

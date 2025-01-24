@@ -1079,6 +1079,82 @@ MlasQLinearGlobalAveragePoolNhwc(
     }
 }
 
+template <typename T8Bits>
+void
+MLASCALL
+MlasQLinearGlobalAveragePoolNchwFixedPoint(
+    const T8Bits* Input,
+    float ScaleInput,
+    int32_t ZeroPointInput,
+    T8Bits* Output,
+    float ScaleOutput,
+    int32_t ZeroPointOutput,
+    size_t Channels,
+    size_t ImageSize,
+    int32_t* /* AccumulateBuffer */
+    )
+{
+    float scale = CheckQLinearGlobalAveragePoolScaleAndSize(ScaleInput, ScaleOutput, ImageSize);
+    int32_t bias = -ZeroPointInput * static_cast<int32_t>(ImageSize);
+    for (; Channels > 0; Channels--) {
+
+        int32_t acc = bias;
+        for (size_t i = 0; i < ImageSize; ++i) {
+            acc += static_cast<int32_t>(*Input++);
+        }
+        int32_t v = static_cast<int32_t>(std::nearbyintf(acc * scale)) + ZeroPointOutput;
+        v = std::min(static_cast<int32_t>(std::numeric_limits<T8Bits>::max()), v);
+        v = std::max(static_cast<int32_t>(std::numeric_limits<T8Bits>::lowest()), v);
+        *Output++ = static_cast<T8Bits>(v);
+    }
+}
+
+template <typename T8Bits>
+void
+MLASCALL
+MlasQLinearGlobalAveragePoolNhwcFixedPoint(
+    const T8Bits* Input,
+    float ScaleInput,
+    int32_t ZeroPointInput,
+    T8Bits* Output,
+    float ScaleOutput,
+    int32_t ZeroPointOutput,
+    size_t Batch,
+    size_t ImageSize,
+    size_t Stride,
+    size_t Channels,
+    int32_t* AccumulateBuffer,
+    const T8Bits* /*ZeroBuffer*/
+    )
+{
+    float scale = CheckQLinearGlobalAveragePoolScaleAndSize(ScaleInput, ScaleOutput, ImageSize);
+    int32_t bias = -ZeroPointInput * static_cast<int32_t>(ImageSize);
+    for (; Batch > 0; Batch--) {
+
+        const T8Bits* batch_input = Input;
+        T8Bits* batch_output = Output;
+        Input += Stride * ImageSize;
+        Output += Stride;
+        std::fill_n(AccumulateBuffer, Channels, bias);
+        for (size_t i = 0; i < ImageSize; ++i) {
+
+            for (size_t c = 0; c < Channels; ++c) {
+                AccumulateBuffer[c] += static_cast<int>(batch_input[c]);
+            }
+
+            batch_input += Stride;
+        }
+
+        for (size_t c = 0; c < Channels; ++c) {
+
+            int32_t v = static_cast<int32_t>(std::nearbyintf(AccumulateBuffer[c] * scale)) + ZeroPointOutput;
+            v = std::min(static_cast<int32_t>(std::numeric_limits<T8Bits>::max()), v);
+            v = std::max(static_cast<int32_t>(std::numeric_limits<T8Bits>::lowest()), v);
+            *batch_output++ = static_cast<T8Bits>(v);
+        }
+    }
+}
+
 #endif
 
 #if defined(MLAS_NEON_INTRINSICS) || defined(MLAS_SSE2_INTRINSICS) || defined(MLAS_LSX_INTRINSICS)
@@ -1168,6 +1244,72 @@ template
 void
 MLASCALL
 MlasQLinearGlobalAveragePoolNhwc<uint8_t>(
+    const uint8_t* Input,
+    float ScaleInput,
+    int32_t ZeroPointInput,
+    uint8_t* Output,
+    float ScaleOutput,
+    int32_t ZeroPointOutput,
+    size_t Batch,
+    size_t ImageSize,
+    size_t Stride,
+    size_t Channels,
+    int32_t* AccumulateBuffer,
+    const uint8_t* ZeroBuffer
+    );
+
+template
+void
+MLASCALL
+MlasQLinearGlobalAveragePoolNchwFixedPoint<int8_t>(
+    const int8_t* Input,
+    float ScaleInput,
+    int32_t ZeroPointInput,
+    int8_t* Output,
+    float ScaleOutput,
+    int32_t ZeroPointOutput,
+    size_t Channels,
+    size_t ImageSize,
+    int32_t* AccumulateBuffer
+    );
+
+template
+void
+MLASCALL
+MlasQLinearGlobalAveragePoolNchwFixedPoint<uint8_t>(
+    const uint8_t* Input,
+    float ScaleInput,
+    int32_t ZeroPointInput,
+    uint8_t* Output,
+    float ScaleOutput,
+    int32_t ZeroPointOutput,
+    size_t Channels,
+    size_t ImageSize,
+    int32_t* AccumulateBuffer
+    );
+
+template
+void
+MLASCALL
+MlasQLinearGlobalAveragePoolNhwcFixedPoint<int8_t>(
+    const int8_t* Input,
+    float ScaleInput,
+    int32_t ZeroPointInput,
+    int8_t* Output,
+    float ScaleOutput,
+    int32_t ZeroPointOutput,
+    size_t Batch,
+    size_t ImageSize,
+    size_t Stride,
+    size_t Channels,
+    int32_t* AccumulateBuffer,
+    const int8_t* ZeroBuffer
+    );
+
+template
+void
+MLASCALL
+MlasQLinearGlobalAveragePoolNhwcFixedPoint<uint8_t>(
     const uint8_t* Input,
     float ScaleInput,
     int32_t ZeroPointInput,
