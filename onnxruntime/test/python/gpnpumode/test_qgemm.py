@@ -11,6 +11,7 @@ import onnxruntime as ort
 from onnx import helper, TensorProto
 import os
 import sys
+import time
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -59,8 +60,7 @@ class TestQGemm(unittest.TestCase):
         b = get_onnx_const(input_b_name, generate_normal_inputs([1024, 4608], np.int8, 0, 32))
         y = get_onnx_const(output_name, generate_normal_inputs([1024, ], np.int32, 0, 32))
 
-        y_sc = TensorProto("")
-        y_zp = TensorProto("")
+
         # Create QLinearAdd node
         qlinear_add_node = onnx.helper.make_node(
             "QGemm",
@@ -115,8 +115,8 @@ class TestQGemm(unittest.TestCase):
         input_a_info = session1.get_inputs()[0]
         # input_b_info = session.get_inputs()[1]
 
-        print(f"Model input names: {input_a_info.name}")
-        print(f"Model input shapes: {input_a_info.shape}")
+        # print(f"Model input names: {input_a_info.name}")
+        # print(f"Model input shapes: {input_a_info.shape}")
 
         # Create random INT8 data matching the input shapes
         shape_tuple_a = tuple(dim if isinstance(dim, int) else 1 for dim in input_a_info.shape)
@@ -133,17 +133,24 @@ class TestQGemm(unittest.TestCase):
 
         # Run inference
         output_name1 = session1.get_outputs()[0].name
-        print(f"Process ID: {os.getpid()}")
+        # print(f"Process ID: {os.getpid()}")
+        t1 = time.time()
         output_data1 = session1.run([output_name1], input_dict)[0]
+        t2 = time.time()
         output_name2 = session2.get_outputs()[0].name
-        print(f"Process ID: {os.getpid()}")
+        # print(f"Process ID: {os.getpid()}")
+        t3 = time.time()
         output_data2 = session2.run([output_name2], input_dict)[0]
+        t4 = time.time()
+
+        print("CPU  ", t2-t1)
+        print("GPNPU", t4-t3)
 
         # Print shapes and types
         print(f"Input A data shape: {x_data_a.shape}, dtype: {x_data_a.dtype}")
-        # print(f"Output data shape: {output_data1.shape}, dtype: {output_data1.dtype}")
-        print("Output data (truncated):\n", output_data1.flatten()[:50], "...\n")
-        print("Output data (truncated):\n", output_data2.flatten()[:50], "...\n")
+        print(f"Output data shape: {output_data1.shape}, dtype: {output_data1.dtype}")
+        # print("Output data (truncated):\n", output_data1.flatten()[:50], "...\n")
+        # print("Output data (truncated):\n", output_data2.flatten()[:50], "...\n")
         # print("hi")
         difference = output_data1 - output_data2
         max_diff = np.max(np.abs(difference))
