@@ -18,10 +18,10 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from helper import get_onnx_const, generate_normal_inputs
 
 
-batch_size = 1
-h=128
-w=128
-channels=8
+m = 1
+k = 2024
+n = 1000
+
 
 class TestQGemm(unittest.TestCase):
     def setUp(self):
@@ -33,9 +33,6 @@ class TestQGemm(unittest.TestCase):
         a_scale, a_zero_point = 0.2039528638124466, -14
         b_scale, b_zero_point = 0.003937007859349251, 0
         y_scale, y_zero_point = 0.1019764319062233, -6
-
-        # Create input shapes
-        input_shape = [batch_size, channels, h, w]
 
         # Define node names
         input_a_name = "input_a"
@@ -55,10 +52,10 @@ class TestQGemm(unittest.TestCase):
         y_sc = get_onnx_const(output_scale_name, y_scale, TensorProto.FLOAT)
         y_zp = get_onnx_const(output_zp_name, y_zero_point, TensorProto.INT8)
         # Define input and output tensors
-        input_a_tensor = helper.make_tensor_value_info(input_a_name, TensorProto.INT8, [4608, 2040])
-        output_tensor = helper.make_tensor_value_info("out", TensorProto.INT8, [1024, 2040])
-        b = get_onnx_const(input_b_name, generate_normal_inputs([1024, 4608], np.int8, 0, 32))
-        y = get_onnx_const(output_name, generate_normal_inputs([1024, ], np.int32, 0, 32))
+        input_a_tensor = helper.make_tensor_value_info(input_a_name, TensorProto.INT8, [m, k])
+        output_tensor = helper.make_tensor_value_info("out", TensorProto.INT8, [m, n])
+        b = get_onnx_const(input_b_name, generate_normal_inputs([n, k], np.int8, 0, 32))
+        y = get_onnx_const(output_name, generate_normal_inputs([n, ], np.int32, 0, 32))
 
 
         # Create QLinearAdd node
@@ -70,7 +67,7 @@ class TestQGemm(unittest.TestCase):
                 output_scale_name, output_zp_name],
             outputs=["out"],
             alpha=0.5,
-            transA=1,
+            transA=0,
             transB=1,
             domain="com.microsoft"
         )
@@ -161,7 +158,7 @@ class TestQGemm(unittest.TestCase):
         max_diff = np.max(np.abs(difference))
 
         # Check the output shape and type
-        self.assertEqual(output_data1.shape, (2040,1024))
+        self.assertEqual(output_data1.shape, (m,n))
         self.assertEqual(output_data1.dtype, np.int8)
         self.assertLessEqual(max_diff, 1)
 
