@@ -192,7 +192,7 @@ class TestQLinearAdd(unittest.TestCase):
         for _ in range(num_iterations):
             # CPU Session
             session_options_cpu = ort.SessionOptions()
-            session_options_cpu.enable_gpnpu = True
+            session_options_cpu.enable_gpnpu = False
             session_options_cpu.enable_profiling = True
             session_options_cpu.profile_file_prefix = "cpu"
             session_cpu = ort.InferenceSession(
@@ -203,7 +203,7 @@ class TestQLinearAdd(unittest.TestCase):
 
             # GPNPU Session
             session_options_gpnpu = ort.SessionOptions()
-            session_options_gpnpu.enable_gpnpu = False
+            session_options_gpnpu.enable_gpnpu = True
             session_options_gpnpu.enable_profiling = True
             session_options_gpnpu.profile_file_prefix = "gpnpu"
             session_gpnpu = ort.InferenceSession(
