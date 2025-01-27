@@ -21,6 +21,30 @@ m = 1
 k = 2024
 n = 1000
 
+def calculate_statistics(measurements):
+    measurements_array = np.array(measurements)
+    return {
+        'mean': np.mean(measurements_array),
+        'std': np.std(measurements_array)
+    }
+
+def print_performance_stats(results):
+    cpu_stats = calculate_statistics(results['cpu_times'])
+    gpnpu_stats = calculate_statistics(results['gpnpu_times'])
+    diff_stats = calculate_statistics(results['max_differences'])
+
+    print("\nPerformance Statistics:")
+    print("\nCPU Time (seconds):")
+    print(f"  Mean: {cpu_stats['mean']:.6f}")
+    print(f"  Std Dev: {cpu_stats['std']:.6f}")
+
+    print("\nGPNPU Time (seconds):")
+    print(f"  Mean: {gpnpu_stats['mean']:.6f}")
+    print(f"  Std Dev: {gpnpu_stats['std']:.6f}")
+
+    print("\nMax difference in output value:")
+    print(f"  Mean: {diff_stats['mean']:.6f}")
+    print(f"  Std Dev: {diff_stats['std']:.6f}")
 
 class TestQGemm(unittest.TestCase):
     def setUp(self):
@@ -158,13 +182,7 @@ class TestQGemm(unittest.TestCase):
     def test_performance_and_accuracy(self):
         # Run test
         results = self.performance_and_accuracy_test()
-
-        # Print statistical summary
-        print("\nPerformance and Accuracy Results:")
-        print(f"CPU Average Time:       {np.mean(results['cpu_times']):.4f}s")
-        print(f"GPNPU Average Time:     {np.mean(results['gpnpu_times']):.4f}s")
-        print(f"Max Difference Mean:    {np.mean(results['max_differences']):.4f}")
-        print(f"Max Difference Max:     {np.max(results['max_differences']):.4f}")
+        print_performance_stats(results)
 
 if __name__ == '__main__':
     unittest.main()
