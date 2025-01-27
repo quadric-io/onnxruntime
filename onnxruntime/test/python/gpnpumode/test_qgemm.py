@@ -130,6 +130,8 @@ class TestQGemm(unittest.TestCase):
             # CPU Session
             session_options_cpu = ort.SessionOptions()
             session_options_cpu.enable_gpnpu = False
+            session_options_cpu.enable_profiling = True
+            session_options_cpu.profile_file_prefix = "cpu"
             session_cpu = ort.InferenceSession(
                 self.model_path,
                 sess_options=session_options_cpu,
@@ -139,6 +141,8 @@ class TestQGemm(unittest.TestCase):
             # GPNPU Session
             session_options_gpnpu = ort.SessionOptions()
             session_options_gpnpu.enable_gpnpu = True
+            session_options_gpnpu.enable_profiling = True
+            session_options_gpnpu.profile_file_prefix = "gpnpu"
             session_gpnpu = ort.InferenceSession(
                 self.model_path,
                 sess_options=session_options_gpnpu,
@@ -154,20 +158,22 @@ class TestQGemm(unittest.TestCase):
             input_dict = {input_a_info.name: x_data_a}
 
             # Time and run CPU inference
-            start_cpu = time.time()
+            start_cpu = time.perf_counter()
             output_cpu = session_cpu.run(
                 [session_cpu.get_outputs()[0].name],
                 input_dict
             )[0]
-            cpu_time = time.time() - start_cpu
+            session_cpu.end_profiling()
+            cpu_time = time.perf_counter() - start_cpu
 
             # Time and run GPNPU inference
-            start_gpnpu = time.time()
+            start_gpnpu = time.perf_counter()
             output_gpnpu = session_gpnpu.run(
                 [session_gpnpu.get_outputs()[0].name],
                 input_dict
             )[0]
-            gpnpu_time = time.time() - start_gpnpu
+            session_gpnpu.end_profiling()
+            gpnpu_time = time.perf_counter() - start_gpnpu
 
             # Calculate max difference
             max_diff = np.max(np.abs(output_cpu - output_gpnpu))
@@ -181,8 +187,9 @@ class TestQGemm(unittest.TestCase):
 
     def test_performance_and_accuracy(self):
         # Run test
-        results = self.performance_and_accuracy_test()
+        results = self.performance_and_accuracy_test(num_iterations=1)
         print_performance_stats(results)
+
 
 if __name__ == '__main__':
     unittest.main()
