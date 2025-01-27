@@ -15,6 +15,9 @@ Abstract:
 --*/
 
 #include "mlasi.h"
+#include "qfunctions_helper.h"
+#include <iostream>
+
 
 size_t
 MLASCALL
@@ -1079,6 +1082,8 @@ MlasQLinearGlobalAveragePoolNhwc(
     }
 }
 
+#endif
+
 template <typename T8Bits>
 void
 MLASCALL
@@ -1095,6 +1100,12 @@ MlasQLinearGlobalAveragePoolNchwFixedPoint(
     )
 {
     float scale = CheckQLinearGlobalAveragePoolScaleAndSize(ScaleInput, ScaleOutput, ImageSize);
+    std::vector<double> ScaleValueVec = {scale};  // Create single-element vector
+    auto pair = dataToQfp(ScaleValueVec, -1, 32, false); // Returns std::make_pair(qfp, fracBits)
+    int fracBits = pair.second;
+    int64_t* fpScale = new int64_t;
+    *fpScale = static_cast<int64_t>((scale) * (1LL << fracBits));
+
     int32_t bias = -ZeroPointInput * static_cast<int32_t>(ImageSize);
     for (; Channels > 0; Channels--) {
 
@@ -1102,7 +1113,7 @@ MlasQLinearGlobalAveragePoolNchwFixedPoint(
         for (size_t i = 0; i < ImageSize; ++i) {
             acc += static_cast<int32_t>(*Input++);
         }
-        int32_t v = static_cast<int32_t>(std::nearbyintf(acc * scale)) + ZeroPointOutput;
+        int32_t v = static_cast<int32_t>((acc * (*fpScale)) >> fracBits) + ZeroPointOutput;
         v = std::min(static_cast<int32_t>(std::numeric_limits<T8Bits>::max()), v);
         v = std::max(static_cast<int32_t>(std::numeric_limits<T8Bits>::lowest()), v);
         *Output++ = static_cast<T8Bits>(v);
@@ -1128,6 +1139,12 @@ MlasQLinearGlobalAveragePoolNhwcFixedPoint(
     )
 {
     float scale = CheckQLinearGlobalAveragePoolScaleAndSize(ScaleInput, ScaleOutput, ImageSize);
+    std::vector<double> ScaleValueVec = {scale};  // Create single-element vector
+    auto pair = dataToQfp(ScaleValueVec, -1, 32, false); // Returns std::make_pair(qfp, fracBits)
+    int fracBits = pair.second;
+    int64_t* fpScale = new int64_t;
+    *fpScale = static_cast<int64_t>((scale) * (1LL << fracBits));
+
     int32_t bias = -ZeroPointInput * static_cast<int32_t>(ImageSize);
     for (; Batch > 0; Batch--) {
 
@@ -1147,7 +1164,7 @@ MlasQLinearGlobalAveragePoolNhwcFixedPoint(
 
         for (size_t c = 0; c < Channels; ++c) {
 
-            int32_t v = static_cast<int32_t>(std::nearbyintf(AccumulateBuffer[c] * scale)) + ZeroPointOutput;
+            int32_t v = static_cast<int32_t>((AccumulateBuffer[c] * (*fpScale)) >> fracBits) + ZeroPointOutput;
             v = std::min(static_cast<int32_t>(std::numeric_limits<T8Bits>::max()), v);
             v = std::max(static_cast<int32_t>(std::numeric_limits<T8Bits>::lowest()), v);
             *batch_output++ = static_cast<T8Bits>(v);
@@ -1155,7 +1172,6 @@ MlasQLinearGlobalAveragePoolNhwcFixedPoint(
     }
 }
 
-#endif
 
 #if defined(MLAS_NEON_INTRINSICS) || defined(MLAS_SSE2_INTRINSICS) || defined(MLAS_LSX_INTRINSICS)
 
