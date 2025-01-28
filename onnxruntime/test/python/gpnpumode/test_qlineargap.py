@@ -12,10 +12,10 @@ from onnx import helper, TensorProto
 import os
 import sys
 import time
+import glob
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-from helper import get_onnx_const, generate_normal_inputs
+from helper import json_to_df, load_json
 
 N, C, H, W = 1, 4, 8, 8
 
@@ -24,6 +24,8 @@ class TestQGemm(unittest.TestCase):
         # Create a specific ONNX model with a single QGemm node
         self.model_path = "qlineargap.onnx"
         self.create_qgemm_model(self.model_path)
+        self.cpu_jsons = []
+        self.gpnpu_jsons = []
 
     def create_qgemm_model(self, output_model_path):
         # Define the quantization parameters for X
@@ -73,85 +75,14 @@ class TestQGemm(unittest.TestCase):
         # Step 6: Save the model to file
         onnx.save(model, output_model_path)
 
-    # def tearDown(self):
-    #     # Delete the ONNX file after testing
-    #     if os.path.exists(self.model_path):
-    #         os.remove(self.model_path)
+    def tearDown(self):
+        # Delete the ONNX file and JSON files after testing
+        if os.path.exists(self.model_path):
+            os.remove(self.model_path)
+        for json_file in glob.glob("*.json"):
+            os.remove(json_file)
 
-    # def test_qlinearconv_inference(self):
-    #     session_options = ort.SessionOptions()
-    #     session_options.enable_gpnpu = False
-    #     print(f"Flag enable_gpnpu: {session_options.enable_gpnpu}")
-
-    #     # Create an inference session
-    #     session1 = ort.InferenceSession(self.model_path, sess_options=session_options, providers=["CPUExecutionProvider"])
-    #     print(f"Check flag enable_gpnpu: {session1.get_session_options().enable_gpnpu}")
-
-    #     session_options.enable_gpnpu = True
-    #     session2 = ort.InferenceSession(self.model_path, sess_options=session_options, providers=["CPUExecutionProvider"])
-    #     print(f"Check flag enable_gpnpu: {session2.get_session_options().enable_gpnpu}")
-
-    #     # Get information about both inputs
-    #     input_a_info = session1.get_inputs()[0]
-    #     # input_b_info = session.get_inputs()[1]
-
-    #     # print(f"Model input names: {input_a_info.name}")
-    #     # print(f"Model input shapes: {input_a_info.shape}")
-
-    #     # Create random INT8 data matching the input shapes
-    #     shape_tuple_a = tuple(dim if isinstance(dim, int) else 1 for dim in input_a_info.shape)
-
-    #     # Generate random data for both inputs
-    #     x_data_a = np.random.randint(
-    #         low=-128, high=128, size=shape_tuple_a, dtype=np.int8
-    #     )
-
-    #     # Create input dictionary with both inputs
-    #     input_dict = {
-    #         input_a_info.name: x_data_a
-    #     }
-
-    #     # Run inference
-    #     output_name1 = session1.get_outputs()[0].name
-    #     # print(f"Process ID: {os.getpid()}")
-    #     t1 = time.time()
-    #     output_data1 = session1.run([output_name1], input_dict)[0]
-    #     t2 = time.time()
-    #     output_name2 = session2.get_outputs()[0].name
-    #     # print(f"Process ID: {os.getpid()}")
-    #     t3 = time.time()
-    #     output_data2 = session2.run([output_name2], input_dict)[0]
-    #     t4 = time.time()
-
-    #     print("CPU  ", t2-t1)
-    #     print("GPNPU", t4-t3)
-
-    #     # Print shapes and types
-    #     print(f"Input A data shape: {x_data_a.shape}, dtype: {x_data_a.dtype}")
-    #     print(f"Output data shape: {output_data1.shape}, dtype: {output_data1.dtype}")
-    #     print("Output data (truncated):\n", output_data1.flatten()[:50], "...\n")
-    #     print("Output data (truncated):\n", output_data2.flatten()[:50], "...\n")
-    #     # print("hi")
-    #     difference = output_data1 - output_data2
-    #     max_diff = np.max(np.abs(difference))
-    #     print(max_diff)
-
-    #     difference = output_data1 - output_data2
-
-    #     max_diff = np.max(np.abs(difference))
-
-    #     # Check the output shape and type
-    #     self.assertEqual(output_data1.shape, (N,C,1,1)) # only N C dims, rest are 1
-    #     self.assertEqual(output_data1.dtype, np.int8)
-    #     self.assertLessEqual(max_diff, 1)
     def performance_and_accuracy_test(self, num_iterations=100):
-        # Prepare results storage
-        results = {
-            'cpu_times': [],
-            'gpnpu_times': [],
-            'max_differences': []
-        }
-
         for _ in range(num_iterations):
             # CPU Session
             session_options_cpu = ort.SessionOptions()
@@ -184,36 +115,43 @@ class TestQGemm(unittest.TestCase):
             input_dict = {input_a_info.name: x_data_a}
 
             # Time and run CPU inference
-            start_cpu = time.perf_counter()
             output_cpu = session_cpu.run(
                 [session_cpu.get_outputs()[0].name],
                 input_dict
             )[0]
-            session_cpu.end_profiling()
-            cpu_time = time.perf_counter() - start_cpu
+            json_name_cpu = session_cpu.end_profiling()
+            self.cpu_jsons.append(json_name_cpu)
 
             # Time and run GPNPU inference
-            start_gpnpu = time.perf_counter()
             output_gpnpu = session_gpnpu.run(
                 [session_gpnpu.get_outputs()[0].name],
                 input_dict
             )[0]
-            session_gpnpu.end_profiling()
-            gpnpu_time = time.perf_counter() - start_gpnpu
+            json_name_gpnpu = session_gpnpu.end_profiling()
+            self.gpnpu_jsons.append(json_name_gpnpu)
 
             # Calculate max difference
             max_diff = np.max(np.abs(output_cpu - output_gpnpu))
 
-            # Store results
-            results['cpu_times'].append(cpu_time)
-            results['gpnpu_times'].append(gpnpu_time)
-            results['max_differences'].append(max_diff)
-
-        return results
+            self.assertLessEqual(max_diff, 1)
 
     def test_performance_and_accuracy(self):
         # Run test
-        results = self.performance_and_accuracy_test(num_iterations=1)
+        self.performance_and_accuracy_test(num_iterations=100)
+        self.json_time_profiling()
+
+    def json_time_profiling(self):
+        def get_time(jsons):
+            times = []
+            for json in jsons:
+                cpu_df, gpu_df = json_to_df(load_json(json), lambda x: True)
+                times.append(cpu_df[cpu_df['name'] == 'QLinearGlobalAveragePool']['duration'].values[0])
+            return np.mean(np.array(times)), np.std(np.array(times))
+        cpu_mean_time, cpu_std_time = get_time(self.cpu_jsons)
+        gpnpu_mean_time, gpnpu_std_time = get_time(self.gpnpu_jsons)
+        print(f"CPU Time:   {cpu_mean_time:8.3f} ± {cpu_std_time:.3f} ms")
+        print(f"GPNPU Time: {gpnpu_mean_time:8.3f} ± {gpnpu_std_time:.3f} ms")
+
 
 if __name__ == '__main__':
     unittest.main()
