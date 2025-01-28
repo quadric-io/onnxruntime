@@ -12,45 +12,23 @@ from onnx import helper, TensorProto
 import os
 import sys
 import time
+import glob
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from helper import get_onnx_const, generate_normal_inputs
+from helper import get_onnx_const, generate_normal_inputs, json_to_df, load_json
 
 m = 1
 k = 2024
 n = 1000
-
-def calculate_statistics(measurements):
-    measurements_array = np.array(measurements)
-    return {
-        'mean': np.mean(measurements_array),
-        'std': np.std(measurements_array)
-    }
-
-def print_performance_stats(results):
-    cpu_stats = calculate_statistics(results['cpu_times'])
-    gpnpu_stats = calculate_statistics(results['gpnpu_times'])
-    diff_stats = calculate_statistics(results['max_differences'])
-
-    print("\nPerformance Statistics:")
-    print("\nCPU Time (seconds):")
-    print(f"  Mean: {cpu_stats['mean']:.6f}")
-    print(f"  Std Dev: {cpu_stats['std']:.6f}")
-
-    print("\nGPNPU Time (seconds):")
-    print(f"  Mean: {gpnpu_stats['mean']:.6f}")
-    print(f"  Std Dev: {gpnpu_stats['std']:.6f}")
-
-    print("\nMax difference in output value:")
-    print(f"  Mean: {diff_stats['mean']:.6f}")
-    print(f"  Std Dev: {diff_stats['std']:.6f}")
 
 class TestQGemm(unittest.TestCase):
     def setUp(self):
         # Create a specific ONNX model with a single QGemm node
         self.model_path = "qgemm_model.onnx"
         self.create_qgemm_model(self.model_path)
+        self.cpu_jsons = []
+        self.gpnpu_jsons = []
 
     def create_qgemm_model(self, output_model_path):
         a_scale, a_zero_point = 0.2039528638124466, -14
@@ -114,18 +92,13 @@ class TestQGemm(unittest.TestCase):
         onnx.save(model, output_model_path)
 
     def tearDown(self):
-        # Delete the ONNX file after testing
+        # Delete the ONNX file and JSON files after testing
         if os.path.exists(self.model_path):
             os.remove(self.model_path)
+        for json_file in glob.glob("*.json"):
+            os.remove(json_file)
 
     def performance_and_accuracy_test(self, num_iterations=100):
-        # Prepare results storage
-        results = {
-            'cpu_times': [],
-            'gpnpu_times': [],
-            'max_differences': []
-        }
-
         for _ in range(num_iterations):
             # CPU Session
             session_options_cpu = ort.SessionOptions()
@@ -158,38 +131,42 @@ class TestQGemm(unittest.TestCase):
             input_dict = {input_a_info.name: x_data_a}
 
             # Time and run CPU inference
-            start_cpu = time.perf_counter()
             output_cpu = session_cpu.run(
                 [session_cpu.get_outputs()[0].name],
                 input_dict
             )[0]
-            session_cpu.end_profiling()
-            cpu_time = time.perf_counter() - start_cpu
+            json_name_cpu = session_cpu.end_profiling()
+            self.cpu_jsons.append(json_name_cpu)
 
             # Time and run GPNPU inference
-            start_gpnpu = time.perf_counter()
             output_gpnpu = session_gpnpu.run(
                 [session_gpnpu.get_outputs()[0].name],
                 input_dict
             )[0]
-            session_gpnpu.end_profiling()
-            gpnpu_time = time.perf_counter() - start_gpnpu
+            json_name_gpnpu = session_gpnpu.end_profiling()
+            self.gpnpu_jsons.append(json_name_gpnpu)
 
             # Calculate max difference
             max_diff = np.max(np.abs(output_cpu - output_gpnpu))
 
-            # Store results
-            results['cpu_times'].append(cpu_time)
-            results['gpnpu_times'].append(gpnpu_time)
-            results['max_differences'].append(max_diff)
-
-        return results
+            self.assertLessEqual(max_diff, 1)
 
     def test_performance_and_accuracy(self):
         # Run test
-        results = self.performance_and_accuracy_test(num_iterations=1)
-        print_performance_stats(results)
+        self.performance_and_accuracy_test(num_iterations=1000)
+        self.json_time_profiling()
 
+    def json_time_profiling(self):
+        def get_time(jsons):
+            times = []
+            for json in jsons:
+                cpu_df, gpu_df = json_to_df(load_json(json), lambda x: True)
+                times.append(cpu_df[cpu_df['name'] == 'QGemm']['duration'].values[0])
+            return np.mean(np.array(times)), np.std(np.array(times))
+        cpu_mean_time, cpu_std_time = get_time(self.cpu_jsons)
+        gpnpu_mean_time, gpnpu_std_time = get_time(self.gpnpu_jsons)
+        print(f"CPU Time:   {cpu_mean_time:8.3f} ± {cpu_std_time:.3f} ms")
+        print(f"GPNPU Time: {gpnpu_mean_time:8.3f} ± {gpnpu_std_time:.3f} ms")
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
