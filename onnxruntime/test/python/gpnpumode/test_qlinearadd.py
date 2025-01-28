@@ -19,9 +19,9 @@ from helper import get_onnx_const, generate_normal_inputs, json_to_df, load_json
 
 
 batch_size = 1
-h=128
-w=128
-channels=8
+h=16
+w=32
+channels=2048
 
 class TestQLinearConv(unittest.TestCase):
     def setUp(self):
