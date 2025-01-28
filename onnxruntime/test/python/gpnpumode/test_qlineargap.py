@@ -17,7 +17,7 @@ import glob
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from helper import json_to_df, load_json
 
-N, C, H, W = 1, 4, 8, 8
+N, C, H, W = 1, 4, 1000, 1000
 
 class TestQGemm(unittest.TestCase):
     def setUp(self):
@@ -137,7 +137,7 @@ class TestQGemm(unittest.TestCase):
 
     def test_performance_and_accuracy(self):
         # Run test
-        self.performance_and_accuracy_test(num_iterations=100)
+        self.performance_and_accuracy_test(num_iterations=1000)
         self.json_time_profiling()
 
     def json_time_profiling(self):
