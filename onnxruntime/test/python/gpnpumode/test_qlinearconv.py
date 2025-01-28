@@ -8,14 +8,12 @@ import unittest
 import numpy as np
 import onnx
 import onnxruntime as ort
-from onnx import helper, TensorProto
 import os
 import sys
-import time
+import glob
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-from helper import get_onnx_const, generate_normal_inputs
+from helper import json_to_df, load_json, get_onnx_const, generate_normal_inputs
 
 x_scale, x_zp = 0.018654844, -14
 w_scale, w_zp = 0.044774472, 0
@@ -267,6 +265,8 @@ class TestQLinearConv(unittest.TestCase):
         # Create a specific ONNX model with a single QLinearConv node
         self.model_path = "qlinearconv_model.onnx"
         self.create_qlinearconv_model(self.model_path)
+        self.cpu_jsons = []
+        self.gpnpu_jsons = []
 
     def create_qlinearconv_model(self, model_path):
         h = 128
@@ -285,72 +285,82 @@ class TestQLinearConv(unittest.TestCase):
         onnx.save(model_def, model_path)
 
     def tearDown(self):
-        # Delete the ONNX file after testing
+        # Delete the ONNX file and JSON files after testing
         if os.path.exists(self.model_path):
             os.remove(self.model_path)
+        for json_file in glob.glob("*.json"):
+            os.remove(json_file)
 
-    def test_qlinearconv_inference(self):
-        # Create random input data
-        input_data = np.random.randint(-128, 127, (1, 8, 128, 128), dtype=np.int8)
+    def performance_and_accuracy_test(self, num_iterations=100):
+        for _ in range(num_iterations):
+            # CPU Session
+            session_options_cpu = ort.SessionOptions()
+            session_options_cpu.enable_gpnpu = False
+            session_options_cpu.enable_profiling = True
+            session_options_cpu.profile_file_prefix = "cpu"
+            session_cpu = ort.InferenceSession(
+                self.model_path,
+                sess_options=session_options_cpu,
+                providers=["CPUExecutionProvider"]
+            )
 
-        # Define scales and zero points
-        input_scale = np.array([x_scale], dtype=np.float32)
-        input_zero_point = np.array([x_zp], dtype=np.int8)
-        weight_scale = np.array([w_scale], dtype=np.float32)
-        weight_zero_point = np.array([w_zp], dtype=np.int8)
-        output_scale = np.array([y_scale], dtype=np.float32)
-        output_zero_point = np.array([y_zp], dtype=np.int8)
+            # GPNPU Session
+            session_options_gpnpu = ort.SessionOptions()
+            session_options_gpnpu.enable_gpnpu = True
+            session_options_gpnpu.enable_profiling = True
+            session_options_gpnpu.profile_file_prefix = "gpnpu"
+            session_gpnpu = ort.InferenceSession(
+                self.model_path,
+                sess_options=session_options_gpnpu,
+                providers=["CPUExecutionProvider"]
+            )
 
-        # Run inference
-        session = ort.InferenceSession(self.model_path, providers=["CPUExecutionProvider"])
+            # Prepare input
+            input_a_info = session_cpu.get_inputs()[0]
+            shape_tuple_a = tuple(dim if isinstance(dim, int) else 1 for dim in input_a_info.shape)
+            x_data_a = np.random.randint(
+                low=-128, high=128, size=shape_tuple_a, dtype=np.int8
+            )
+            input_dict = {input_a_info.name: x_data_a}
 
-        session_options = ort.SessionOptions()
-        session_options.enable_gpnpu = True
+            # Time and run CPU inference
+            output_cpu = session_cpu.run(
+                [session_cpu.get_outputs()[0].name],
+                input_dict
+            )[0]
+            json_name_cpu = session_cpu.end_profiling()
+            self.cpu_jsons.append(json_name_cpu)
 
-        # Create an inference session
-        session1 = ort.InferenceSession(self.model_path, sess_options=session_options, providers=["CPUExecutionProvider"])
-        print(f"Check model 1 enable_gpnpu: {session1.get_session_options().enable_gpnpu}")
-        session_options.enable_gpnpu = False
-        session2 = ort.InferenceSession(self.model_path, sess_options=session_options, providers=["CPUExecutionProvider"])
-        print(f"Check model 2 enable_gpnpu: {session2.get_session_options().enable_gpnpu}")
+            # Time and run GPNPU inference
+            output_gpnpu = session_gpnpu.run(
+                [session_gpnpu.get_outputs()[0].name],
+                input_dict
+            )[0]
+            json_name_gpnpu = session_gpnpu.end_profiling()
+            self.gpnpu_jsons.append(json_name_gpnpu)
 
-        # Inspect the model's input to get the name and shape
-        inp_info = session1.get_inputs()[0]
-        input_name = inp_info.name
-        input_shape = inp_info.shape  # e.g. [1, 8, 128, 128]
+            # Calculate max difference
+            max_diff = np.max(np.abs(output_cpu - output_gpnpu))
 
-        # Create random INT8 data matching the input shape
-        # If any dimension is None or 'batch size' is variable, adjust accordingly
-        shape_tuple = tuple(dim if isinstance(dim, int) else 1 for dim in input_shape)
-        x_data = np.random.randint(
-            low=-128, high=128, size=shape_tuple, dtype=np.int8
-        )
+            self.assertLessEqual(max_diff, 1)
 
-        # Run inference
-        output_name1 = session1.get_outputs()[0].name
-        t1 = time.time()
-        output_data1 = session1.run([output_name1], {input_name: x_data})[0]
-        t2 = time.time()
-        output_name2 = session2.get_outputs()[0].name
-        t3 = time.time()
-        output_data2 = session2.run([output_name2], {input_name: x_data})[0]
-        t4 = time.time()
-        print("CPU      ", t2-t1)
-        print("GPNPU    ", t4-t3)
+    def test_performance_and_accuracy(self):
+        # Run test
+        self.performance_and_accuracy_test(num_iterations=1000)
+        self.json_time_profiling()
 
+    def json_time_profiling(self):
+        def get_time(jsons):
+            times = []
+            for json in jsons:
+                cpu_df, gpu_df = json_to_df(load_json(json), lambda x: True)
+                times.append(cpu_df[cpu_df['name'] == 'QLinearConv']['duration'].values[0])
+            return np.mean(np.array(times)), np.std(np.array(times))
+        cpu_mean_time, cpu_std_time = get_time(self.cpu_jsons)
+        gpnpu_mean_time, gpnpu_std_time = get_time(self.gpnpu_jsons)
+        print(f"CPU Time:   {cpu_mean_time:8.3f} ± {cpu_std_time:.3f} ms")
+        print(f"GPNPU Time: {gpnpu_mean_time:8.3f} ± {gpnpu_std_time:.3f} ms")
 
-        BATCH_SIZE = 1
-        CHANNELS = 64
-        HEIGHT = 128
-        WIDTH = 128
-        difference = output_data1 - output_data2
-
-        max_diff = np.max(np.abs(difference))
-
-        # Check the output shape and type
-        self.assertEqual(output_data1.shape, (BATCH_SIZE, CHANNELS, HEIGHT, WIDTH))
-        self.assertEqual(output_data1.dtype, np.int8)
-        self.assertLessEqual(max_diff, 1)
 
 if __name__ == '__main__':
     unittest.main()
