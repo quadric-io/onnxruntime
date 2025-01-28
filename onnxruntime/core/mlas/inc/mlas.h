@@ -1268,6 +1268,24 @@ MlasRequantizeOutput(
     size_t CountN
     );
 
+template<typename OutputType>
+void
+MLASCALL
+MlasRequantizeOutputFixedPoint(
+    const int32_t* Input,
+    size_t InputLeadingDimension,
+    OutputType* Output,
+    size_t OutputLeadingDimension,
+    const int32_t* Bias,
+    const float* Scale,
+    bool PerColumnScale,
+    OutputType ZeroPoint,
+    size_t StartM,
+    size_t StartN,
+    size_t CountM,
+    size_t CountN
+    );
+
 class MLAS_QGEMM_REQUANT_OUTPUT_PROCESSOR : public MLAS_QGEMM_OUTPUT_PROCESSOR
 {
    public:
@@ -1376,6 +1394,23 @@ template<typename DataType>
 void
 MLASCALL
 MlasQLinearAdd(
+    const DataType* InputA,
+    float ScaleA,
+    int32_t ZeroPointA,
+    const DataType* InputB,
+    float ScaleB,
+    int32_t ZeroPointB,
+    float ScaleC,
+    int32_t ZeroPointC,
+    DataType* OutputC,
+    size_t N,
+    bool IsScalarB
+    );
+
+template<typename DataType>
+void
+MLASCALL
+MlasQLinearAddFixedPoint(
     const DataType* InputA,
     float ScaleA,
     int32_t ZeroPointA,
