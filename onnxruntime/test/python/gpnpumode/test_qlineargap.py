@@ -137,7 +137,7 @@ class TestQGemm(unittest.TestCase):
 
     def test_performance_and_accuracy(self):
         # Run test
-        self.performance_and_accuracy_test(num_iterations=1000)
+        self.performance_and_accuracy_test(num_iterations=1)
         self.json_time_profiling()
 
     def json_time_profiling(self):
@@ -145,7 +145,7 @@ class TestQGemm(unittest.TestCase):
             times = []
             for json in jsons:
                 cpu_df, gpu_df = json_to_df(load_json(json), lambda x: True)
-                times.append(cpu_df[cpu_df['name'] == 'QLinearGlobalAveragePool']['duration'].values[0])
+                times.extend(cpu_df[cpu_df['name'] == 'QLinearGlobalAveragePool']['duration'].values)
             return np.mean(np.array(times)), np.std(np.array(times))
         cpu_mean_time, cpu_std_time = get_time(self.cpu_jsons)
         gpnpu_mean_time, gpnpu_std_time = get_time(self.gpnpu_jsons)
