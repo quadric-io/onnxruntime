@@ -155,7 +155,7 @@ class TestQLinearConv(unittest.TestCase):
 
     def test_performance_and_accuracy(self):
         # Run test
-        self.performance_and_accuracy_test(num_iterations=1)
+        self.performance_and_accuracy_test(num_iterations=1000)
         self.json_time_profiling()
 
     def json_time_profiling(self):
