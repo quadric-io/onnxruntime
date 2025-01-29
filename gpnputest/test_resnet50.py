@@ -44,6 +44,7 @@ def run_qlinearconv_model(onnx_file_path="/home/maggies/onnxruntime/gpnputest/re
 if __name__ == "__main__":
     total = 0
     n = 10
+    name = ""
     for i in range(n):
         t, name = run_qlinearconv_model()
         total += t
