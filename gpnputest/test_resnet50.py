@@ -11,8 +11,9 @@ def run_qlinearconv_model(num, onnx_file_path="/home/maggies/onnxruntime/gpnpute
     # Create an inference session
     session_options = ort.SessionOptions()
     # session_options.enable_gpnpu = True
-    # session_options.enable_profiling = True
-    # session_options.intra_op_num_threads = num
+    session_options.enable_profiling = True
+    session_options.intra_op_num_threads = num
+    session_options.profile_file_prefix = str(num)
     session = ort.InferenceSession(onnx_file_path, sess_options = session_options, providers=["CPUExecutionProvider"])
     # Inspect the model's input to get the name and shape
     inp_info = session.get_inputs()[0]
@@ -31,7 +32,7 @@ def run_qlinearconv_model(num, onnx_file_path="/home/maggies/onnxruntime/gpnpute
     output_name = session.get_outputs()[0].name
     t1 = time.time()
     output_data = session.run([output_name], {input_name: x_data})[0]
-    # name = session.end_profiling()
+    name = session.end_profiling()
     t2 = time.time()
 
     # print(t2-t1)
@@ -44,7 +45,7 @@ def run_qlinearconv_model(num, onnx_file_path="/home/maggies/onnxruntime/gpnpute
 
 if __name__ == "__main__":
     total = 0
-    n = 10
+    n = 1
     name = ""
     for num in range(4, 20, 4):
         total = 0
@@ -53,6 +54,5 @@ if __name__ == "__main__":
             total += t
         print(num, total/n)
 
-    # cpu_df, gpu_df = json_to_df(load_json(name), lambda x: True)
-    # print(cpu_df)
-    # print(gpu_df)
+        cpu_df, gpu_df = json_to_df(load_json(name), lambda x: True)
+        print(np.sum(cpu_df["duration"])/1000)
