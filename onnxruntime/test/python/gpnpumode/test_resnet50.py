@@ -7,17 +7,19 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from helper import json_to_df, load_json
 
 print(np.__version__)
-def run_qlinearconv_model(onnx_file_path="/home/maggies/onnxruntime/onnxruntime/test/python/gpnpumode/resnet50_512_1024_int8_opset11.onnx"):
+def run_qlinearconv_model(num, onnx_file_path="/home/maggies/onnxruntime/onnxruntime/test/python/gpnpumode/resnet50_512_1024_int8_opset11.onnx"):
     # Create an inference session
     session_options = ort.SessionOptions()
     session_options.enable_gpnpu = True
     session_options.enable_profiling = True
-    session = ort.InferenceSession(onnx_file_path, sess_options = session_options, providers=["CUDAExecutionProvider"])
+    session_options.intra_op_num_threads = num
+    session_options.profile_file_prefix = str(num)+"gpnpu"
+    session = ort.InferenceSession(onnx_file_path, sess_options = session_options, providers=["CPUExecutionProvider"])
     # Inspect the model's input to get the name and shape
     inp_info = session.get_inputs()[0]
     input_name = inp_info.name
     input_shape = inp_info.shape  # e.g. [1, 8, 128, 128]
-    # print(f"Model input name: {input_name}")
+    # print(f"Model input name: {input_name}")- 377
     # print(f"Model input shape: {input_shape}")
 
     # If any dimension is None or 'batch size' is variable, adjust accordingly
@@ -44,11 +46,13 @@ def run_qlinearconv_model(onnx_file_path="/home/maggies/onnxruntime/onnxruntime/
 if __name__ == "__main__":
     total = 0
     n = 1
-    for i in range(n):
-        t, name = run_qlinearconv_model()
-        total += t
-    print(total/n)
+    name = ""
+    for num in range(4, 20, 4):
+        total = 0
+        for i in range(n):
+            t, name = run_qlinearconv_model(num)
+            total += t
 
-    cpu_df, gpu_df = json_to_df(load_json(name), lambda x: True)
-    print(cpu_df)
-    print(gpu_df)
+
+        cpu_df, gpu_df = json_to_df(load_json(name), lambda x: True)
+        print(str(num) + " - " + str(round(total/n*1000)) + " " + str(round(np.sum(cpu_df["duration"])/1000)))
