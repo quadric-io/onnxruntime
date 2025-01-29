@@ -3,7 +3,7 @@ import onnxruntime as ort
 import time
 import os
 import sys
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from helper import json_to_df, load_json
 
 print(np.__version__)
@@ -43,7 +43,7 @@ def run_qlinearconv_model(onnx_file_path="/home/maggies/onnxruntime/gpnputest/re
 
 if __name__ == "__main__":
     total = 0
-    n = 1
+    n = 10
     for i in range(n):
         t, name = run_qlinearconv_model()
         total += t
