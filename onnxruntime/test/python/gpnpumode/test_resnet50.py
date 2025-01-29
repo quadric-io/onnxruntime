@@ -10,7 +10,7 @@ print(np.__version__)
 def run_qlinearconv_model(onnx_file_path="/home/maggies/onnxruntime/onnxruntime/test/python/gpnpumode/resnet50_512_1024_int8_opset11.onnx"):
     # Create an inference session
     session_options = ort.SessionOptions()
-    # session_options.enable_gpnpu = True
+    session_options.enable_gpnpu = True
     session_options.enable_profiling = True
     session = ort.InferenceSession(onnx_file_path, sess_options = session_options, providers=["CUDAExecutionProvider"])
     # Inspect the model's input to get the name and shape
