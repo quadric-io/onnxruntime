@@ -7,12 +7,13 @@ import sys
 from helper import json_to_df, load_json
 
 print(np.__version__)
-def run_qlinearconv_model(onnx_file_path="/home/maggies/onnxruntime/gpnputest/resnet50_512_1024_int8_opset11.onnx"):
+def run_qlinearconv_model(num, onnx_file_path="/home/maggies/onnxruntime/gpnputest/resnet50_512_1024_int8_opset11.onnx"):
     # Create an inference session
     session_options = ort.SessionOptions()
     # session_options.enable_gpnpu = True
-    session_options.enable_profiling = True
-    session = ort.InferenceSession(onnx_file_path, sess_options = session_options, providers=["CUDAExecutionProvider"])
+    # session_options.enable_profiling = True
+    # session_options.intra_op_num_threads = num
+    session = ort.InferenceSession(onnx_file_path, sess_options = session_options, providers=["CPUExecutionProvider"])
     # Inspect the model's input to get the name and shape
     inp_info = session.get_inputs()[0]
     input_name = inp_info.name
@@ -30,7 +31,7 @@ def run_qlinearconv_model(onnx_file_path="/home/maggies/onnxruntime/gpnputest/re
     output_name = session.get_outputs()[0].name
     t1 = time.time()
     output_data = session.run([output_name], {input_name: x_data})[0]
-    name = session.end_profiling()
+    # name = session.end_profiling()
     t2 = time.time()
 
     # print(t2-t1)
@@ -45,11 +46,13 @@ if __name__ == "__main__":
     total = 0
     n = 10
     name = ""
-    for i in range(n):
-        t, name = run_qlinearconv_model()
-        total += t
-    print(total/n)
+    for num in range(4, 20, 4):
+        total = 0
+        for i in range(n):
+            t, name = run_qlinearconv_model(num)
+            total += t
+        print(num, total/n)
 
-    cpu_df, gpu_df = json_to_df(load_json(name), lambda x: True)
-    print(cpu_df)
-    print(gpu_df)
+    # cpu_df, gpu_df = json_to_df(load_json(name), lambda x: True)
+    # print(cpu_df)
+    # print(gpu_df)
