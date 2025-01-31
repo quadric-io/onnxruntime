@@ -3,17 +3,19 @@ import onnxruntime as ort
 import time
 import os
 import sys
+# from tvm.contrib.epu.chimera_job.chimera_job import ChimeraJob
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from helper import json_to_df, load_json
 
 print(np.__version__)
-def run_qlinearconv_model(num, onnx_file_path="/home/maggies/onnxruntime/onnxruntime/test/python/gpnpumode/resnet50_512_1024_int8_opset11.onnx"):
+def run_ort(x_data, onnx_file_path="resnet_50.onnx"):
     # Create an inference session
     session_options = ort.SessionOptions()
     session_options.enable_gpnpu = True
     session_options.enable_profiling = True
-    session_options.intra_op_num_threads = num
-    session_options.profile_file_prefix = str(num)+"gpnpu"
+    session_options.intra_op_num_threads = 16
+    session_options.profile_file_prefix = str(16)+"gpnpu"
     session = ort.InferenceSession(onnx_file_path, sess_options = session_options, providers=["CPUExecutionProvider"])
     # Inspect the model's input to get the name and shape
     inp_info = session.get_inputs()[0]
@@ -24,9 +26,6 @@ def run_qlinearconv_model(num, onnx_file_path="/home/maggies/onnxruntime/onnxrun
 
     # If any dimension is None or 'batch size' is variable, adjust accordingly
     shape_tuple = tuple(dim if isinstance(dim, int) else 1 for dim in input_shape)
-    x_data = np.random.uniform(
-        low=-128, high=128, size=shape_tuple
-    ).astype(np.float32)
 
     # Run inference
     output_name = session.get_outputs()[0].name
@@ -41,18 +40,34 @@ def run_qlinearconv_model(num, onnx_file_path="/home/maggies/onnxruntime/onnxrun
     # print(f"Output data shape: {output_data.shape}, dtype: {output_data.dtype}")
     # print("Output data (truncated):\n", output_data.flatten()[:50], "...\n")
 
-    return [t2-t1, name]
+    return output_data.flatten()
+
+def run_tvm(img_input):
+    model_path = "/Users/maggies/Work/tvm/tests/python/contrib/test_epu/onnx_nets/resnet_50/resnet_50.onnx"
+    # Execute retina net with CGC
+    cgc_job = ChimeraJob(model_p=model_path, macs_per_pe=8, quiet_iss=False)
+    cgc_job.analyze_network()
+    cgc_job.compile(quiet=True)
+    print("compile finished!")
+
+    outputs = cgc_job.run_inference_harness(inputs={"input": img_input})
+    return outputs['output'].flatten()
 
 if __name__ == "__main__":
-    total = 0
-    n = 1
-    name = ""
-    for num in range(4, 20, 4):
-        total = 0
-        for i in range(n):
-            t, name = run_qlinearconv_model(num)
-            total += t
+    # total = 0
+    # n = 1
+    # name = ""
+    # for num in range(4, 20, 4):
+    #     total = 0
+    #     for i in range(n):
+    #         t, name = run_qlinearconv_model(num)
+    #         total += t
 
 
-        cpu_df, gpu_df = json_to_df(load_json(name), lambda x: True)
-        print(str(num) + " - " + str(round(total/n*1000)) + " " + str(round(np.sum(cpu_df["duration"])/1000)))
+    #     cpu_df, gpu_df = json_to_df(load_json(name), lambda x: True)
+    #     print(str(num) + " - " + str(round(total/n*1000)) + " " + str(round(np.sum(cpu_df["duration"])/1000)))
+    x_data = np.random.rand(1, 3, 224, 224).astype(np.float32)
+    print(x_data)
+    output_ort = run_ort(x_data)
+    # output_tvm = run_tvm(x_data)
+    # print(np.sum(np.abs(output_ort) - np.abs(output_tvm)))
