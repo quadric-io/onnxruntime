@@ -316,6 +316,263 @@ MlasQLinearGlobalAveragePoolNhwcSingleBatch(
                          Output_zero_point, 0, 0, 1, Channels);
 }
 
+template <typename T8Bits>
+void
+MLASCALL
+MlasQLinearGlobalAveragePoolNchwFixedPoint(
+    const T8Bits* Input,
+    float ScaleInput,
+    int32_t ZeroPointInput,
+    T8Bits* Output,
+    float ScaleOutput,
+    int32_t ZeroPointOutput,
+    size_t Channels,
+    size_t ImageSize,
+    int32_t* AccumulateBuffer
+    )
+{
+    float scale = CheckQLinearGlobalAveragePoolScaleAndSize(ScaleInput, ScaleOutput, ImageSize);
+    int32_t bias[] = {-ZeroPointInput * static_cast<int32_t>(ImageSize), 0, 0, 0};
+    const int32x4_t vbias = vld1q_s32(bias);
+    const int32x4_t vzero = vmovq_n_s32(0);
+    const uint8_t* InputU8 = (const uint8_t*)(Input);
+
+    int32_t* sum_buffer = AccumulateBuffer;
+    uint8_t tail_buffer[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    for (size_t c = Channels; c > 0; c--) {
+
+        int32x4_t vacc_lo = vbias;
+        int32x4_t vacc_hi = vzero;
+        auto Len = ImageSize;
+        for (; Len >= 32; Len -= 32) {
+
+            const uint8x8_t vi0 = vld1_u8(InputU8);
+            const uint8x8_t vi1 = vld1_u8(InputU8 + 8);
+            const uint8x8_t vi2 = vld1_u8(InputU8 + 16);
+            const uint8x8_t vi3 = vld1_u8(InputU8 + 24);
+
+            int16x8_t vsum;
+            if constexpr (std::is_signed<T8Bits>::value) {
+
+                const int16x8_t vs01 = vaddl_s8(vreinterpret_s8_u8(vi0), vreinterpret_s8_u8(vi1));
+                const int16x8_t vs23 = vaddl_s8(vreinterpret_s8_u8(vi2), vreinterpret_s8_u8(vi3));
+                vsum = vaddq_s16(vs01, vs23);
+            } else {
+
+                const uint16x8_t vs01 = vaddl_u8(vi0, vi1);
+                const uint16x8_t vs23 = vaddl_u8(vi2, vi3);
+                vsum = vreinterpretq_s16_u16(vaddq_u16(vs01, vs23));
+            }
+
+            vacc_lo = vaddw_s16(vacc_lo, vget_low_s16(vsum));
+            vacc_hi = vaddw_s16(vacc_hi, vget_high_s16(vsum));
+            InputU8 += 32;
+        }
+        for (; Len >= 8; Len -= 8) {
+
+            int16x8_t vsum;
+            if constexpr (std::is_signed<T8Bits>::value) {
+                vsum = vmovl_s8(vreinterpret_s8_u8(vld1_u8(InputU8)));
+            } else {
+                vsum = vreinterpretq_s16_u16(vmovl_u8(vld1_u8(InputU8)));
+            }
+            vacc_lo = vaddw_s16(vacc_lo, vget_low_s16(vsum));
+            vacc_hi = vaddw_s16(vacc_hi, vget_high_s16(vsum));
+            InputU8 += 8;
+        }
+
+        if (Len > 0) {
+
+            memcpy(tail_buffer, InputU8, Len);
+            int16x8_t vsum;
+            if constexpr (std::is_signed<T8Bits>::value) {
+                vsum = vmovl_s8(vreinterpret_s8_u8(vld1_u8(tail_buffer)));
+            } else {
+                vsum = vreinterpretq_s16_u16(vmovl_u8(vld1_u8(tail_buffer)));
+            }
+
+            vacc_lo = vaddw_s16(vacc_lo, vget_low_s16(vsum));
+            vacc_hi = vaddw_s16(vacc_hi, vget_high_s16(vsum));
+            InputU8 += Len;
+        }
+
+        vacc_lo = vaddq_s32(vacc_lo, vacc_hi);
+        int32x2_t vacc = vadd_s32(vget_high_s32(vacc_lo), vget_low_s32(vacc_lo));
+        *sum_buffer++ = vget_lane_s32(vpadd_s32(vacc, vacc), 0);
+    }
+
+    MlasRequantizeOutputFixedPoint(AccumulateBuffer, Channels, Output, Channels, nullptr, &scale, false,
+                         static_cast<T8Bits>(ZeroPointOutput), 0, 0, 1, Channels);
+}
+
+template <typename T8Bits>
+MLAS_FORCEINLINE
+void
+MlasQLinearGlobalAveragePoolNhwcSingleBatchFixedPoint(
+    const T8Bits* Input,
+    T8Bits* Output,
+    const T8Bits* LastOf8,
+    size_t ImageSize,
+    size_t Channels,
+    size_t Stride,
+    int32_t Bias,
+    float Scale,
+    T8Bits Output_zero_point,
+    int32_t* AccumulateBuffer,
+    const T8Bits* ZeroBuffer
+    )
+{
+#define LOAD_FULL_CHANNELS()           \
+    const uint8x8_t vi0 = vld1_u8(i0); \
+    i0 += 8;                           \
+    const uint8x8_t vi1 = vld1_u8(i1); \
+    i1 += 8;                           \
+    const uint8x8_t vi2 = vld1_u8(i2); \
+    i2 += 8;                           \
+    const uint8x8_t vi3 = vld1_u8(i3); \
+    i3 += 8;                           \
+    const uint8x8_t vi4 = vld1_u8(i4); \
+    i4 += 8;                           \
+    const uint8x8_t vi5 = vld1_u8(i5); \
+    i5 += 8;                           \
+    const uint8x8_t vi6 = vld1_u8(i6); \
+    i6 += 8
+
+#define CALCULATE_ACCUMULATE_VECTORS()                                                         \
+    int32x4_t vacc_lo = finish_one_pass ? vld1q_s32(acc) : vbias;                              \
+    int32x4_t vacc_hi = finish_one_pass ? vld1q_s32(acc + 4) : vbias;                          \
+    int16x8_t vsum;                                                                            \
+    if constexpr (std::is_signed<T8Bits>::value) {                                             \
+        const int16x8_t vsum01 = vaddl_s8(vreinterpret_s8_u8(vi0), vreinterpret_s8_u8(vi1));   \
+        const int16x8_t vsum23 = vaddl_s8(vreinterpret_s8_u8(vi2), vreinterpret_s8_u8(vi3));   \
+        const int16x8_t vsum45 = vaddl_s8(vreinterpret_s8_u8(vi4), vreinterpret_s8_u8(vi5));   \
+        const int16x8_t vsum016 = vaddw_s8(vsum01, vreinterpret_s8_u8(vi6));                   \
+        const int16x8_t vsum2345 = vaddq_s16(vsum23, vsum45);                                  \
+        vsum = vaddq_s16(vsum016, vsum2345);                                                   \
+    } else {                                                                                   \
+        const uint16x8_t vsum01 = vaddl_u8(vi0, vi1);                                          \
+        const uint16x8_t vsum23 = vaddl_u8(vi2, vi3);                                          \
+        const uint16x8_t vsum45 = vaddl_u8(vi4, vi5);                                          \
+        const uint16x8_t vsum016 = vaddw_u8(vsum01, vi6);                                      \
+        const uint16x8_t vsum2345 = vaddq_u16(vsum23, vsum45);                                 \
+        vsum = vreinterpretq_s16_u16(vaddq_u16(vsum016, vsum2345));                            \
+    }                                                                                          \
+    vacc_lo = vaddw_s16(vacc_lo, vget_low_s16(vsum));                                          \
+    vacc_hi = vaddw_s16(vacc_hi, vget_high_s16(vsum))
+
+    uint8_t tail[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    const int32x4_t vbias = vld1q_dup_s32(&Bias);
+    bool finish_one_pass = false;
+    const size_t step_next_group = 7 * Stride - (Channels & ~size_t{7});
+
+    const uint8_t* LastOf8U8 = (const uint8_t*)LastOf8;
+    const uint8_t* i0 = (const uint8_t*)Input;
+    const uint8_t* i1 = i0 + Stride;
+    const uint8_t* i4 = i0 + Stride * 4;
+    const uint8_t* i2 = i1 + Stride;
+    const uint8_t* i5 = i4 + Stride;
+    const uint8_t* i3 = i2 + Stride;
+    const uint8_t* i6 = i5 + Stride;
+
+    for (; ImageSize > 7; ImageSize -= 7) {
+
+        int32_t* acc = AccumulateBuffer;
+        size_t c = Channels;
+        for (; c >= 8; c -= 8) {
+
+            LOAD_FULL_CHANNELS();
+
+            CALCULATE_ACCUMULATE_VECTORS();
+
+            vst1q_s32(acc, vacc_lo);
+            vst1q_s32(acc + 4, vacc_hi);
+            acc += 8;
+        }
+        if (c > 0) {
+
+            const uint8x8_t vi0 = vld1_u8(((i0 >= LastOf8U8) ? (const uint8_t*)memcpy(tail, i0, c) : i0));
+            const uint8x8_t vi1 = vld1_u8(((i1 >= LastOf8U8) ? (const uint8_t*)memcpy(tail, i1, c) : i1));
+            const uint8x8_t vi2 = vld1_u8(((i2 >= LastOf8U8) ? (const uint8_t*)memcpy(tail, i2, c) : i2));
+            const uint8x8_t vi3 = vld1_u8(((i3 >= LastOf8U8) ? (const uint8_t*)memcpy(tail, i3, c) : i3));
+            const uint8x8_t vi4 = vld1_u8(((i4 >= LastOf8U8) ? (const uint8_t*)memcpy(tail, i4, c) : i4));
+            const uint8x8_t vi5 = vld1_u8(((i5 >= LastOf8U8) ? (const uint8_t*)memcpy(tail, i5, c) : i5));
+            const uint8x8_t vi6 = vld1_u8(((i6 >= LastOf8U8) ? (const uint8_t*)memcpy(tail, i6, c) : i6));
+
+            CALCULATE_ACCUMULATE_VECTORS();
+
+            vst1q_s32(acc, vacc_lo);
+            vst1q_s32(acc + 4, vacc_hi);
+        }
+        finish_one_pass = true;
+
+        i0 += step_next_group;
+        i1 += step_next_group;
+        i2 += step_next_group;
+        i3 += step_next_group;
+        i4 += step_next_group;
+        i5 += step_next_group;
+        i6 += step_next_group;
+    }
+
+    if (ImageSize > 0) {
+
+        switch (ImageSize) {
+            case 1:
+                i1 = (const uint8_t*)ZeroBuffer; /* fall through */
+            case 2:
+                i2 = (const uint8_t*)ZeroBuffer; /* fall through */
+            case 3:
+                i3 = (const uint8_t*)ZeroBuffer; /* fall through */
+            case 4:
+                i4 = (const uint8_t*)ZeroBuffer; /* fall through */
+            case 5:
+                i5 = (const uint8_t*)ZeroBuffer; /* fall through */
+            case 6:
+                i6 = (const uint8_t*)ZeroBuffer; /* fall through */
+            default:
+                break;
+        }
+
+        int32_t* acc = AccumulateBuffer;
+        size_t c = Channels;
+        for (; c >= 8; c -= 8) {
+
+            LOAD_FULL_CHANNELS();
+
+            CALCULATE_ACCUMULATE_VECTORS();
+
+            vst1q_s32(acc, vacc_lo);
+            vst1q_s32(acc + 4, vacc_hi);
+            acc += 8;
+        }
+
+        if (c > 0) {
+
+            const uint8x8_t vi0 =
+                vld1_u8(((i0 >= LastOf8U8) ? (const uint8_t*)memcpy(tail, i0, c) : i0));
+            const uint8x8_t vi1 = vld1_u8(
+                ((1 < ImageSize && i1 >= LastOf8U8) ? (const uint8_t*)memcpy(tail, i1, c) : i1));
+            const uint8x8_t vi2 = vld1_u8(
+                ((2 < ImageSize && i2 >= LastOf8U8) ? (const uint8_t*)memcpy(tail, i2, c) : i2));
+            const uint8x8_t vi3 = vld1_u8(
+                ((3 < ImageSize && i3 >= LastOf8U8) ? (const uint8_t*)memcpy(tail, i3, c) : i3));
+            const uint8x8_t vi4 = vld1_u8(
+                ((4 < ImageSize && i4 >= LastOf8U8) ? (const uint8_t*)memcpy(tail, i4, c) : i4));
+            const uint8x8_t vi5 = vld1_u8(
+                ((5 < ImageSize && i5 >= LastOf8U8) ? (const uint8_t*)memcpy(tail, i5, c) : i5));
+            const uint8x8_t vi6 = vld1_u8(
+                ((6 < ImageSize && i6 >= LastOf8U8) ? (const uint8_t*)memcpy(tail, i6, c) : i6));
+
+            CALCULATE_ACCUMULATE_VECTORS();
+
+            vst1q_s32(acc, vacc_lo);
+            vst1q_s32(acc + 4, vacc_hi);
+        }
+    }
+    MlasRequantizeOutputFixedPoint(AccumulateBuffer, Channels, Output, Channels, nullptr, &Scale, false,
+                         Output_zero_point, 0, 0, 1, Channels);
+}
+
 #elif defined(MLAS_SSE2_INTRINSICS)
 
 template <typename T8Bits>
