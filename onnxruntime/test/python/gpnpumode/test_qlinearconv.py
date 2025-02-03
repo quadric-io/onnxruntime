@@ -284,12 +284,12 @@ class TestQLinearConv(unittest.TestCase):
             strides)
         onnx.save(model_def, model_path)
 
-    def tearDown(self):
-        # Delete the ONNX file and JSON files after testing
-        if os.path.exists(self.model_path):
-            os.remove(self.model_path)
-        for json_file in glob.glob("*.json"):
-            os.remove(json_file)
+    # def tearDown(self):
+    #     # Delete the ONNX file and JSON files after testing
+    #     if os.path.exists(self.model_path):
+    #         os.remove(self.model_path)
+    #     for json_file in glob.glob("*.json"):
+    #         os.remove(json_file)
 
     def performance_and_accuracy_test(self, num_iterations=100):
         for _ in range(num_iterations):
@@ -341,6 +341,7 @@ class TestQLinearConv(unittest.TestCase):
 
             # Calculate max difference
             max_diff = np.max(np.abs(output_cpu - output_gpnpu))
+            print(max_diff)
 
             self.assertLessEqual(max_diff, 1)
 

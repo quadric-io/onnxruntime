@@ -25,7 +25,6 @@ def run_ort(flag, x_data, onnx_file_path="/Users/maggies/Desktop/resnet50_512_10
 
     # If any dimension is None or 'batch size' is variable, adjust accordingly
     shape_tuple = tuple(dim if isinstance(dim, int) else 1 for dim in input_shape)
-
     # Run inference
     output_name = session.get_outputs()[0].name
     t1 = time.time()
@@ -50,7 +49,8 @@ def run_tvm(img_input, model_path):
 
     outputs = cgc_job.run_inference_harness(inputs={"input": img_input})
     # return outputs
-    return outputs['495'].flatten()
+    name = list(outputs.keys())[0]
+    return outputs['output'].flatten()
 
 if __name__ == "__main__":
     # total = 0
@@ -65,13 +65,14 @@ if __name__ == "__main__":
 
     #     cpu_df, gpu_df = json_to_df(load_json(name), lambda x: True)
     #     print(str(num) + " - " + str(round(total/n*1000)) + " " + str(round(np.sum(cpu_df["duration"])/1000)))
-    x_data = np.random.rand(1, 8, 128, 128).astype(np.int8)
+    x_data = np.random.rand(1, 3, 224, 224).astype(np.float32)
     # print(x_data)
-    output_ort_gpnpu = run_ort(True, x_data, "qlinearconv_model.onnx")
-    output_ort_cpu = run_ort(False, x_data, "qlinearconv_model.onnx")
+    path = "resnet_50.onnx"
+    output_ort_gpnpu = run_ort(True, x_data, path)
+    output_ort_cpu = run_ort(False, x_data, path)
     np.save("gpnpu.npy", output_ort_gpnpu)
     np.save("cpu.npy", output_ort_cpu)
-    output_tvm = run_tvm(x_data, "qlinearconv_model.onnx")
+    output_tvm = run_tvm(x_data, path)
     print(output_tvm)
-    print(output_tvm.keys())
+    # print(output_tvm.keys())
     np.save("tvm.npy", output_tvm)

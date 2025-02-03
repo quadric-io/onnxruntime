@@ -985,6 +985,7 @@ Status QLinearConv<ActType>::Compute(OpKernelContext* context) const {
       }
       if (gpnpu_flag) {
         // New MlasRequantizeOuput but for fixed point not floating point
+        std::cout << "Using GPNPU" << std::endl;
         MlasRequantizeOutputFixedPoint(
           worker_gemm_output,
           static_cast<size_t>(M),
