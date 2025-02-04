@@ -50,7 +50,7 @@ def run_tvm(img_input, model_path):
     outputs = cgc_job.run_inference_harness(inputs={"input": img_input})
     # return outputs
     name = list(outputs.keys())[0]
-    return outputs['output'].flatten()
+    return outputs['conv_0.output'].flatten()
 
 if __name__ == "__main__":
     # total = 0
@@ -65,11 +65,29 @@ if __name__ == "__main__":
 
     #     cpu_df, gpu_df = json_to_df(load_json(name), lambda x: True)
     #     print(str(num) + " - " + str(round(total/n*1000)) + " " + str(round(np.sum(cpu_df["duration"])/1000)))
-    x_data = np.random.rand(1, 3, 224, 224).astype(np.float32)
+    # x_data = np.random.rand(1, 3, 224, 224).astype(np.float32) # resnet 50
+    # x_data = (x_data * 255) - 128
     # print(x_data)
-    path = "resnet_50.onnx"
+    # x_data = np.random.rand(1, 8, 128, 128).astype(np.int8)   # qlinearconv
+    # x_data = np.random.rand(1,2048,7,7) # qlineargap
+    # x_data = np.random.rand(1, 2024)
+    x_data = np.random.rand(1, 8, 128, 128)
+    x_data = (x_data * 255) - 128
+    x_data = x_data.astype(np.int8)
+    shape_tuple = (1,2048,7,7) # qlineargap
+    # shape_tuple = (1,3,224,224) # resnet 50
+    # shape_tuple = (1, 8, 128, 128) # qlinearconv
+    # x_data = np.random.randint(
+    #             low=-128, high=128, size=shape_tuple, dtype=np.int8
+    #         )
+
+    # print(x_data)
+    # path = "qlinearconv_model.onnx"
+    path = "/Users/maggies/Work/onnxruntime/onnxruntime/test/python/gpnpumode/qlinearconv_model.onnx"
     output_ort_gpnpu = run_ort(True, x_data, path)
     output_ort_cpu = run_ort(False, x_data, path)
+    max_diff = np.max(np.abs(output_ort_cpu - output_ort_gpnpu))
+    print(max_diff)
     np.save("gpnpu.npy", output_ort_gpnpu)
     np.save("cpu.npy", output_ort_cpu)
     output_tvm = run_tvm(x_data, path)

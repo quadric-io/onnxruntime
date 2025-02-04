@@ -68,6 +68,7 @@ class TestQLinearAdd(unittest.TestCase):
 
         # Define input and output tensors
         input_a_tensor = helper.make_tensor_value_info(input_a_name, TensorProto.INT8, input_shape)
+        print(input_shape)
         b = get_onnx_const(input_b_name, generate_normal_inputs(input_shape, np.int8, 0, 32))
         input_b_tensor = helper.make_tensor_value_info(input_b_name, TensorProto.INT8, input_shape)
         output_tensor = helper.make_tensor_value_info(output_name, TensorProto.INT8, input_shape)
@@ -90,10 +91,10 @@ class TestQLinearAdd(unittest.TestCase):
         onnx.checker.check_model(model, True)
         onnx.save(model, output_model_path)
 
-    def tearDown(self):
-        # Delete the ONNX file after testing
-        if os.path.exists(self.model_path):
-            os.remove(self.model_path)
+    # def tearDown(self):
+    #     # Delete the ONNX file after testing
+    #     if os.path.exists(self.model_path):
+    #         os.remove(self.model_path)
 
     def test_qlinearconv_inference(self):
         session_options = ort.SessionOptions()

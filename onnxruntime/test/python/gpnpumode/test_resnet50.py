@@ -67,6 +67,7 @@ if __name__ == "__main__":
     #     cpu_df, gpu_df = json_to_df(load_json(name), lambda x: True)
     #     print(str(num) + " - " + str(round(total/n*1000)) + " " + str(round(np.sum(cpu_df["duration"])/1000)))
     x_data = np.random.rand(1, 3, 224, 224).astype(np.float32)
+    x_data = (x_data * 255) - 128
     print(x_data)
     output_ort = run_ort(x_data)
     # output_tvm = run_tvm(x_data)

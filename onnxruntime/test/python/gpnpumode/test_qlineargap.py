@@ -75,12 +75,12 @@ class TestQGemm(unittest.TestCase):
         # Step 6: Save the model to file
         onnx.save(model, output_model_path)
 
-    def tearDown(self):
-        # Delete the ONNX file and JSON files after testing
-        if os.path.exists(self.model_path):
-            os.remove(self.model_path)
-        for json_file in glob.glob("*.json"):
-            os.remove(json_file)
+    # def tearDown(self):
+    #     # Delete the ONNX file and JSON files after testing
+    #     if os.path.exists(self.model_path):
+    #         os.remove(self.model_path)
+    #     for json_file in glob.glob("*.json"):
+    #         os.remove(json_file)
 
     def performance_and_accuracy_test(self, num_iterations=100):
         for _ in range(num_iterations):
@@ -132,12 +132,13 @@ class TestQGemm(unittest.TestCase):
 
             # Calculate max difference
             max_diff = np.max(np.abs(output_cpu - output_gpnpu))
+            print(max_diff)
 
             self.assertLessEqual(max_diff, 1)
 
     def test_performance_and_accuracy(self):
         # Run test
-        self.performance_and_accuracy_test(num_iterations=1)
+        self.performance_and_accuracy_test(num_iterations=10)
         self.json_time_profiling()
 
     def json_time_profiling(self):

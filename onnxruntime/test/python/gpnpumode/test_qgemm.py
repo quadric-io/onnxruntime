@@ -90,10 +90,10 @@ class TestQGemm(unittest.TestCase):
         onnx.checker.check_model(model, True)
         onnx.save(model, output_model_path)
 
-    def tearDown(self):
-        # Delete the ONNX file after testing
-        if os.path.exists(self.model_path):
-            os.remove(self.model_path)
+    # def tearDown(self):
+    #     # Delete the ONNX file after testing
+    #     if os.path.exists(self.model_path):
+    #         os.remove(self.model_path)
 
     def test_qlinearconv_inference(self):
         session_options = ort.SessionOptions()
@@ -122,6 +122,8 @@ class TestQGemm(unittest.TestCase):
         x_data_a = np.random.randint(
             low=-128, high=128, size=shape_tuple_a, dtype=np.int8
         )
+
+        print(shape_tuple_a)
 
         # Create input dictionary with both inputs
         input_dict = {
