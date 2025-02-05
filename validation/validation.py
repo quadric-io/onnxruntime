@@ -20,7 +20,7 @@ def run_ort(flag, x_data, onnx_file_path="/Users/maggies/Desktop/resnet50_512_10
     inp_info = session.get_inputs()[0]
     input_name = inp_info.name
     input_shape = inp_info.shape  # e.g. [1, 8, 128, 128]
-    # print(f"Model input name: {input_name}")- 377
+    print(f"Model input name: {input_name}")
     # print(f"Model input shape: {input_shape}")
 
     # If any dimension is None or 'batch size' is variable, adjust accordingly
@@ -38,19 +38,19 @@ def run_ort(flag, x_data, onnx_file_path="/Users/maggies/Desktop/resnet50_512_10
     # print(f"Output data shape: {output_data.shape}, dtype: {output_data.dtype}")
     # print("Output data (truncated):\n", output_data.flatten()[:50], "...\n")
 
-    return output_data.flatten()
+    return output_data.flatten(), input_name
 
-def run_tvm(img_input, model_path):
+def run_tvm(img_input, model_path, input_name):
     # Execute retina net with CGC
     cgc_job = ChimeraJob(model_p=model_path, macs_per_pe=8, quiet_iss=False)
     cgc_job.analyze_network()
     cgc_job.compile(quiet=True)
     print("compile finished!")
 
-    outputs = cgc_job.run_inference_harness(inputs={"input": img_input})
+    outputs = cgc_job.run_inference_harness(inputs={input_name: img_input})
     # return outputs
-    name = list(outputs.keys())[0]
-    return outputs['conv_0.output'].flatten()
+    output_name = list(outputs.keys())[0]
+    return outputs[output_name].flatten()
 
 if __name__ == "__main__":
     # total = 0
@@ -71,26 +71,28 @@ if __name__ == "__main__":
     # x_data = np.random.rand(1, 8, 128, 128).astype(np.int8)   # qlinearconv
     # x_data = np.random.rand(1,2048,7,7) # qlineargap
     # x_data = np.random.rand(1, 2024)
-    x_data = np.random.rand(1, 8, 128, 128)
-    x_data = (x_data * 255) - 128
-    x_data = x_data.astype(np.int8)
-    shape_tuple = (1,2048,7,7) # qlineargap
+    # x_data = np.random.rand(1, 8, 128, 128)
+    # x_data = (x_data * 255) - 128
+    # x_data = x_data.astype(np.int8)
+    # shape_tuple = (1, 8, 128, 128) # qlinearadd
+    shape_tuple = (1, 2024) # qlineargap
+    # shape_tuple = (1,2048,8,8) # qlineargap
     # shape_tuple = (1,3,224,224) # resnet 50
     # shape_tuple = (1, 8, 128, 128) # qlinearconv
-    # x_data = np.random.randint(
-    #             low=-128, high=128, size=shape_tuple, dtype=np.int8
-    #         )
+    x_data = np.random.randint(
+                low=-128, high=128, size=shape_tuple, dtype=np.int8
+            )
 
     # print(x_data)
     # path = "qlinearconv_model.onnx"
-    path = "/Users/maggies/Work/onnxruntime/onnxruntime/test/python/gpnpumode/qlinearconv_model.onnx"
-    output_ort_gpnpu = run_ort(True, x_data, path)
-    output_ort_cpu = run_ort(False, x_data, path)
+    path = "/Users/maggies/Work/onnxruntime/onnxruntime/test/python/gpnpumode/qgemm_model.onnx"
+    output_ort_gpnpu, input_name = run_ort(True, x_data, path)
+    output_ort_cpu, _ = run_ort(False, x_data, path)
     max_diff = np.max(np.abs(output_ort_cpu - output_ort_gpnpu))
     print(max_diff)
     np.save("gpnpu.npy", output_ort_gpnpu)
     np.save("cpu.npy", output_ort_cpu)
-    output_tvm = run_tvm(x_data, path)
-    print(output_tvm)
+    output_tvm = run_tvm(x_data, path, input_name)
+    # print(output_tvm)
     # print(output_tvm.keys())
     np.save("tvm.npy", output_tvm)
