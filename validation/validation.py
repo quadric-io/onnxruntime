@@ -47,7 +47,7 @@ def run_tvm(img_input, model_path):
     cgc_job.compile(quiet=True)
     print("compile finished!")
 
-    outputs = cgc_job.run_inference_harness(inputs={"input": img_input})
+    outputs = cgc_job.run_inference_harness(inputs={"inp": img_input})
     # return outputs
     name = list(outputs.keys())[0]
     return outputs['conv_0.output'].flatten()
