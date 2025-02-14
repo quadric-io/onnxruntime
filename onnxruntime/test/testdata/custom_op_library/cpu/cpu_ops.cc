@@ -322,6 +322,19 @@ struct AttrTesterStringOp : Ort::CustomOpBase<AttrTesterStringOp, AttrTesterStri
   }
 };
 
+void LookupTable(const Ort::Custom::Tensor<int8_t>& input,
+                 const Ort::Custom::Tensor<int8_t>& lut,
+                 Ort::Custom::Tensor<int8_t>& output) {
+  auto input_shape = input.Shape();
+  auto input_data = input.Data();
+  auto lut_data = lut.Data();
+  auto output_data = output.Allocate(input_shape);
+
+  for (int64_t i = 0; i < input.NumberOfElement(); ++i) {
+    output_data[i] = lut_data[static_cast<uint8_t>(input_data[i])];
+  }
+}
+
 void RegisterOps(Ort::CustomOpDomain& domain) {
   static const std::unique_ptr<OrtLiteCustomOp> c_CustomOpOne{Ort::Custom::CreateLiteCustomOp<KernelOne>("CustomOpOne", "CPUExecutionProvider")};
   static const std::unique_ptr<OrtLiteCustomOp> c_CustomOpTwo{Ort::Custom::CreateLiteCustomOp("CustomOpTwo", "CPUExecutionProvider", KernelTwo)};
@@ -336,6 +349,9 @@ void RegisterOps(Ort::CustomOpDomain& domain) {
 
   static const std::unique_ptr<OrtLiteCustomOp> c_AtterTesterIntFloat{Ort::Custom::CreateLiteCustomOp("AttrTesterIntFloat", "CPUExecutionProvider", AttrTesterIntFloatCompute, AttrTesterIntFloatShapeInfer)};
   static const AttrTesterStringOp c_AtterTesterString;
+
+  // Register the LookupTable custom op
+  static const std::unique_ptr<OrtLiteCustomOp> c_LookupTable{Ort::Custom::CreateLiteCustomOp("LookupTable", "CPUExecutionProvider", LookupTable)};
 
 #if !defined(DISABLE_FLOAT8_TYPES)
   static const CustomOpOneFloat8 c_CustomOpOneFloat8;
@@ -354,6 +370,8 @@ void RegisterOps(Ort::CustomOpDomain& domain) {
   domain.Add(c_CopyTensorArrayCombined.get());
   domain.Add(c_AtterTesterIntFloat.get());
   domain.Add(&c_AtterTesterString);
+  domain.Add(c_LookupTable.get()); // Add the LookupTable custom op
+
 
 #if !defined(DISABLE_FLOAT8_TYPES)
   domain.Add(&c_CustomOpOneFloat8);
