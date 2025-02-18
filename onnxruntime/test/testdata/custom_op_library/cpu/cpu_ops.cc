@@ -1,6 +1,6 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
-
+#include <iostream>
 #define ORT_API_MANUAL_INIT
 #include "onnxruntime_cxx_api.h"
 #undef ORT_API_MANUAL_INIT
@@ -352,7 +352,7 @@ void RegisterOps(Ort::CustomOpDomain& domain) {
 
   // Register the LookupTable custom op
   static const std::unique_ptr<OrtLiteCustomOp> c_LookupTable{Ort::Custom::CreateLiteCustomOp("LookupTable", "CPUExecutionProvider", LookupTable)};
-
+  std::cout << "Registered LookupTable" << std::endl;
 #if !defined(DISABLE_FLOAT8_TYPES)
   static const CustomOpOneFloat8 c_CustomOpOneFloat8;
   static const std::unique_ptr<OrtLiteCustomOp> c_FilterFloat8{Ort::Custom::CreateLiteCustomOp("FilterFloat8", "CPUExecutionProvider", FilterFloat8)};
