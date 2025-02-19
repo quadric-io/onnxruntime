@@ -38,7 +38,7 @@ jobs:
         wheel_path=$(find . -name '*.whl' | xargs readlink -f)
         echo "wheel_path=$wheel_path" >> $GITHUB_ENV
     - name: Upload Artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: ort-wheel-linux
         path: ${{ env.wheel_path }}
@@ -58,7 +58,7 @@ jobs:
         wheel_path=$(find . -name '*.whl' | xargs readlink -f)
         echo "wheel_path=$wheel_path" >> $GITHUB_ENV
     - name: Upload Artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: ort-wheel-mac
         path: ${{ env.wheel_path }}
@@ -71,12 +71,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Download ort-wheel-linux artifact
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: ort-wheel-linux
         path: artifacts/
     - name: Download ort-wheel-mac artifact
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: ort-wheel-mac
         path: artifacts/
