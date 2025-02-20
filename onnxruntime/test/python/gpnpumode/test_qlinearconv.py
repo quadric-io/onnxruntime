@@ -10,6 +10,9 @@ import onnx
 import onnxruntime as ort
 from onnx import helper, TensorProto
 import os
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from helper import generate_normal_inputs
 
 x_scale, x_zp = 0.018654844, -14
 w_scale, w_zp = 0.044774472, 0
@@ -49,9 +52,6 @@ def conv_output_height_width(kernel, strides, padding, dilation, input_dims):
         (input_dims[1] + padding[1] + padding[3] - dilation[1] * (kernel[1] - 1) - 1) // strides[1]
         + 1
     )
-
-def generate_normal_inputs(shape, dtype, mu=0, sigma=32, a_min=-127, a_max=127):
-    return np.clip(np.rint(np.random.normal(mu, sigma, shape)).astype(dtype), a_min, a_max)
 
 def get_onnx_linear_conv(
     op_name,
