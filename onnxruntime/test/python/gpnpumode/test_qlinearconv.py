@@ -299,44 +299,20 @@ class TestQLinearConv(unittest.TestCase):
             os.remove(self.model_path)
 
     def test_qlinearconv_inference(self):
-        # Create random input data
-        input_data = np.random.randint(-128, 127, (1, 8, 128, 128), dtype=np.int8)
-
-        # Define scales and zero points
-        input_scale = np.array([x_scale], dtype=np.float32)
-        input_zero_point = np.array([x_zp], dtype=np.int8)
-        weight_scale = np.array([w_scale], dtype=np.float32)
-        weight_zero_point = np.array([w_zp], dtype=np.int8)
-        output_scale = np.array([y_scale], dtype=np.float32)
-        output_zero_point = np.array([y_zp], dtype=np.int8)
-
         # Run inference
-        session = ort.InferenceSession(self.model_path, providers=["CPUExecutionProvider"])
-        # output = session.run(
-        #     ['conv_0.output'],
-        #     {
-        #         'inp': input_data,
-        #         'conv_0.x_scale': input_scale,
-        #         'conv_0.x_zp': input_zero_point,
-        #         'conv_0.w_scale': weight_scale,
-        #         'conv_0.w_zp': weight_zero_point,
-        #         'conv_0.y_scale': output_scale,
-        #         'conv_0.y_zp': output_zero_point
-        #     }
-        # )[0]
-
-        session_options = ort.SessionOptions()
-        session_options.enable_gpnpu = True
+        session_options_gpnpu = ort.SessionOptions()
+        session_options_gpnpu.enable_gpnpu = True
 
         # Create an inference session
-        session1 = ort.InferenceSession(self.model_path, sess_options=session_options, providers=["CPUExecutionProvider"])
-        print(f"Check model 1 enable_gpnpu: {session1.get_session_options().enable_gpnpu}")
-        session_options.enable_gpnpu = False
-        session2 = ort.InferenceSession(self.model_path, sess_options=session_options, providers=["CPUExecutionProvider"])
-        print(f"Check model 2 enable_gpnpu: {session2.get_session_options().enable_gpnpu}")
+        session_gpnpu = ort.InferenceSession(self.model_path, sess_options=session_options_gpnpu, providers=["CPUExecutionProvider"])
+        print(f"Check model 1 enable_gpnpu: {session_gpnpu.get_session_options().enable_gpnpu}")
+        session_options_cpu = ort.SessionOptions()
+        session_options_cpu.enable_gpnpu = False
+        session_cpu = ort.InferenceSession(self.model_path, sess_options=session_options_cpu, providers=["CPUExecutionProvider"])
+        print(f"Check model 2 enable_gpnpu: {session_cpu.get_session_options().enable_gpnpu}")
 
         # Inspect the model's input to get the name and shape
-        inp_info = session1.get_inputs()[0]
+        inp_info = session_gpnpu.get_inputs()[0]
         input_name = inp_info.name
         input_shape = inp_info.shape  # e.g. [1, 8, 128, 128]
 
@@ -348,16 +324,10 @@ class TestQLinearConv(unittest.TestCase):
         )
 
         # Run inference
-        output_name1 = session1.get_outputs()[0].name
-        output_data1 = session1.run([output_name1], {input_name: x_data})[0]
-        output_name2 = session2.get_outputs()[0].name
-        output_data2 = session2.run([output_name2], {input_name: x_data})[0]
-
-        # Print shapes and types
-        # print(f"Input data shape: {x_data.shape}, dtype: {x_data.dtype}")
-        # print(f"Output data shape: {output_data1.shape}, dtype: {output_data1.dtype}")
-        # print("Output data 1 (truncated):\n", output_data1.flatten()[:50], "...\n")
-        # print("Output data 2 (truncated):\n", output_data2.flatten()[:50], "...\n")
+        output_name1 = session_gpnpu.get_outputs()[0].name
+        output_data1 = session_gpnpu.run([output_name1], {input_name: x_data})[0]
+        output_name2 = session_cpu.get_outputs()[0].name
+        output_data2 = session_cpu.run([output_name2], {input_name: x_data})[0]
 
         BATCH_SIZE = 1
         CHANNELS = 64
