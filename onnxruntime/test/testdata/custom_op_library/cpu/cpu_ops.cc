@@ -329,9 +329,11 @@ void LookupTable(const Ort::Custom::Tensor<int8_t>& input,
   auto input_data = input.Data();
   auto lut_data = lut.Data();
   auto output_data = output.Allocate(input_shape);
-
+  int32_t ind = 0;
   for (int64_t i = 0; i < input.NumberOfElement(); ++i) {
-    output_data[i] = lut_data[static_cast<uint8_t>(input_data[i])];
+    // output_data[i] = lut_data[static_cast<uint8_t>(input_data[i])];
+    ind = static_cast<int32_t>(input_data[i]) + 128;
+    output_data[i] = lut_data[ind];
   }
 }
 

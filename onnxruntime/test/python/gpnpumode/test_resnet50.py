@@ -9,11 +9,11 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from helper import json_to_df, load_json
 
 print(np.__version__)
-def run_ort(x_data, onnx_file_path="resnet_50.onnx"):
+def run_ort(x_data, flag, onnx_file_path="resnet_50.onnx"):
     # Create an inference session
     session_options = ort.SessionOptions()
-    session_options.enable_gpnpu = True
-    session_options.enable_profiling = True
+    session_options.enable_gpnpu = flag
+    # session_options.enable_profiling = True
     session_options.intra_op_num_threads = 16
     session_options.profile_file_prefix = str(16)+"gpnpu"
     session = ort.InferenceSession(onnx_file_path, sess_options = session_options, providers=["CPUExecutionProvider"])
@@ -31,7 +31,7 @@ def run_ort(x_data, onnx_file_path="resnet_50.onnx"):
     output_name = session.get_outputs()[0].name
     t1 = time.time()
     output_data = session.run([output_name], {input_name: x_data})[0]
-    name = session.end_profiling()
+    # name = session.end_profiling()
     t2 = time.time()
 
     # print(t2-t1)
@@ -39,19 +39,7 @@ def run_ort(x_data, onnx_file_path="resnet_50.onnx"):
     # print(f"Input data shape: {x_data.shape}, dtype: {x_data.dtype}")
     # print(f"Output data shape: {output_data.shape}, dtype: {output_data.dtype}")
     # print("Output data (truncated):\n", output_data.flatten()[:50], "...\n")
-
     return output_data.flatten()
-
-def run_tvm(img_input):
-    model_path = "/Users/maggies/Work/tvm/tests/python/contrib/test_epu/onnx_nets/resnet_50/resnet_50.onnx"
-    # Execute retina net with CGC
-    cgc_job = ChimeraJob(model_p=model_path, macs_per_pe=8, quiet_iss=False)
-    cgc_job.analyze_network()
-    cgc_job.compile(quiet=True)
-    print("compile finished!")
-
-    outputs = cgc_job.run_inference_harness(inputs={"input": img_input})
-    return outputs['output'].flatten()
 
 if __name__ == "__main__":
     # total = 0
@@ -68,6 +56,10 @@ if __name__ == "__main__":
     #     print(str(num) + " - " + str(round(total/n*1000)) + " " + str(round(np.sum(cpu_df["duration"])/1000)))
     x_data = np.random.rand(1, 3, 224, 224).astype(np.float32)
     print(x_data)
-    output_ort = run_ort(x_data)
+    ort_cpu = run_ort(x_data, False)
+    ort_gpnpu = run_ort(x_data, True)
+    np.save("ort_cpu.npy", ort_cpu)
+    np.save("ort_gpnpu.npy", ort_gpnpu)
+
     # output_tvm = run_tvm(x_data)
-    # print(np.sum(np.abs(output_ort) - np.abs(output_tvm)))
+    print(np.max(np.abs(ort_cpu) - ort_gpnpu))

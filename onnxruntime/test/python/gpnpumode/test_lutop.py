@@ -35,7 +35,7 @@ model = helper.make_model(graph, opset_imports=opset_imports, producer_name='cus
 onnx.save(model, 'test_model.onnx')
 
 # Prepare input data
-input_data = np.array([1, 2, 3], dtype=np.int8)
+input_data = np.array([-128, 0, 127], dtype=np.int8)
 lut_data = np.array([127 - i for i in range(256)], dtype=np.int8)  # Example LUT: invert values
 
 # Run the model with ONNX Runtime
