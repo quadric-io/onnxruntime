@@ -132,7 +132,7 @@ MlasQLinearAddKernelRawHelperFixedPoint(
 
         // ValueC = ValueC >> mulScaleC;
         ValueC = customRound<16>(static_cast<int32_t>(ValueC));
-        int32_t ValueCInt = ValueC + ZeroPointC;
+        int32_t ValueCInt = static_cast<int32_t>(ValueC + ZeroPointC);
         ValueCInt = std::min(std::max(ValueCInt, MinimumValue), MaximumValue);
         OutputC[n] = (DataType)(ValueCInt);
     }
