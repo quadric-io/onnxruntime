@@ -80,6 +80,9 @@ struct SessionOptions {
   // set the execution order of the graph
   ExecutionOrder execution_order = ExecutionOrder::DEFAULT;
 
+  // set to true if emulating gpnpu
+  bool enable_gpnpu = false;
+
   // enable profiling for this session.
   bool enable_profiling = false;
 
