@@ -2196,7 +2196,7 @@ MlasRequantizeOutputFixedPoint(
     *fpScale = static_cast<int64_t>(*Scale * (1LL << fracBits));
 
 
-    const int32_t PerMatrixScaleValue = PerColumnScale ? 0 : *fpScale;
+    const int32_t PerMatrixScaleValue = PerColumnScale ? 0 : static_cast<int32_t>(*fpScale);
     const int32_t MinimumValue = std::numeric_limits<OutputType>::lowest();
     const int32_t MaximumValue = std::numeric_limits<OutputType>::max();
 
