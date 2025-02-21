@@ -385,11 +385,12 @@ void LookupTable(const Ort::Custom::Tensor<int8_t>& input,
 //   }
 // };
 
+// 1. Define the kernel that implements the computation
 struct LookupTableKernel {
-  // Add member variable to store the lookup table
   std::vector<int8_t> lut_values;
 
-  LookupTableKernel(const OrtApi* api, const OrtKernelInfo* info) {
+  // Initialize from kernel info - this is called during CreateKernel
+  void Init(const OrtApi* api, const OrtKernelInfo* info) {
     // Get default allocator
     OrtAllocator* allocator;
     CUSTOM_ENFORCE(api->GetAllocatorWithDefaultOptions(&allocator) == nullptr,
@@ -423,7 +424,7 @@ struct LookupTableKernel {
       // If the tensor is INT8 (what we expect from your Python code)
       const int8_t* tensor_data;
       CUSTOM_ENFORCE(api->GetTensorMutableData(lut_tensor, (void**)&tensor_data) == nullptr,
-                  "Failed to get tensor data");
+                    "Failed to get tensor data");
 
       for (size_t i = 0; i < 256; ++i) {
         lut_values[i] = tensor_data[i];
@@ -433,7 +434,7 @@ struct LookupTableKernel {
       // If the tensor is INT64 (what you were handling before)
       const int64_t* tensor_data;
       CUSTOM_ENFORCE(api->GetTensorMutableData(lut_tensor, (void**)&tensor_data) == nullptr,
-                  "Failed to get tensor data");
+                    "Failed to get tensor data");
 
       for (size_t i = 0; i < 256; ++i) {
         lut_values[i] = static_cast<int8_t>(tensor_data[i]);
@@ -455,22 +456,134 @@ struct LookupTableKernel {
     api->ReleaseValue(lut_tensor);
   }
 
-  Ort::Status Compute(const Ort::Custom::Tensor<int8_t>& input,
-                   Ort::Custom::Tensor<int8_t>& output) {
-    auto input_shape = input.Shape();
-    auto input_data = input.Data();
-    auto output_data = output.Allocate(input_shape);
+  // The compute method with the expected signature
+  void Compute(OrtKernelContext* context) {
+    Ort::KernelContext ctx(context);
+    auto input = ctx.GetInput(0);
+    const auto* input_data = input.GetTensorData<int8_t>();
+    auto dimensions = input.GetTensorTypeAndShapeInfo().GetShape();
+    auto output = ctx.GetOutput(0, dimensions);
+    auto* output_data = output.GetTensorMutableData<int8_t>();
+    const size_t size = output.GetTensorTypeAndShapeInfo().GetElementCount();
 
-    for (int64_t i = 0; i < input.NumberOfElement(); ++i) {
-      // Convert to unsigned char first to handle negative values correctly
-      // uint8_t index = static_cast<uint8_t>(input_data[i]) + 128;
+    for (size_t i = 0; i < size; i++) {
       uint8_t index = static_cast<uint8_t>(input_data[i]) + 128;
       output_data[i] = lut_values[index];
     }
+  }
+};
 
+// 2. Define the operator class that ties everything together
+struct LookupTableOp : Ort::CustomOpBase<LookupTableOp, LookupTableKernel> {
+  void* CreateKernel(const OrtApi& api, const OrtKernelInfo* info) const {
+    auto kernel = std::make_unique<LookupTableKernel>();
+    kernel->Init(&api, info);
+    return kernel.release();
+  }
+
+  const char* GetName() const { return "LookupTable"; }
+  const char* GetExecutionProviderType() const { return "CPUExecutionProvider"; }
+  size_t GetInputTypeCount() const { return 1; }
+  ONNXTensorElementDataType GetInputType(size_t) const { return ONNX_TENSOR_ELEMENT_DATA_TYPE_INT8; }
+  size_t GetOutputTypeCount() const { return 1; }
+  ONNXTensorElementDataType GetOutputType(size_t) const { return ONNX_TENSOR_ELEMENT_DATA_TYPE_INT8; }
+
+  // Optional: Implement shape inference if needed
+  static Ort::Status InferOutputShape(Ort::ShapeInferContext& ctx) {
+    // Simply pass through the input shape to output
+    auto input_shape = ctx.GetInputShape(0);
+    ctx.SetOutputShape(0, input_shape);
     return Ort::Status{nullptr};
   }
 };
+
+
+// struct LookupTableKernel {
+//   // Add member variable to store the lookup table
+//   std::vector<int8_t> lut_values;
+
+//   LookupTableKernel(const OrtApi* api, const OrtKernelInfo* info) {
+//     // Get default allocator
+//     OrtAllocator* allocator;
+//     CUSTOM_ENFORCE(api->GetAllocatorWithDefaultOptions(&allocator) == nullptr,
+//                   "Failed to get default allocator");
+
+//     // Get the lookup table tensor attribute
+//     OrtValue* lut_tensor = nullptr;
+//     CUSTOM_ENFORCE(api->KernelInfoGetAttribute_tensor(info, "lut", allocator, &lut_tensor) == nullptr,
+//                   "Failed to get lut tensor attribute");
+
+//     // Determine the tensor's data type
+//     OrtTensorTypeAndShapeInfo* shape_info;
+//     CUSTOM_ENFORCE(api->GetTensorTypeAndShape(lut_tensor, &shape_info) == nullptr,
+//                   "Failed to get tensor shape info");
+
+//     ONNXTensorElementDataType tensor_type;
+//     CUSTOM_ENFORCE(api->GetTensorElementType(shape_info, &tensor_type) == nullptr,
+//                   "Failed to get tensor element type");
+
+//     size_t num_elements;
+//     CUSTOM_ENFORCE(api->GetTensorShapeElementCount(shape_info, &num_elements) == nullptr,
+//                   "Failed to get tensor element count");
+
+//     // Verify we got 256 values
+//     CUSTOM_ENFORCE(num_elements == 256, "Lookup table must contain exactly 256 values");
+
+//     // Copy the values based on the actual tensor type
+//     lut_values.resize(256);
+
+//     if (tensor_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_INT8) {
+//       // If the tensor is INT8 (what we expect from your Python code)
+//       const int8_t* tensor_data;
+//       CUSTOM_ENFORCE(api->GetTensorMutableData(lut_tensor, (void**)&tensor_data) == nullptr,
+//                   "Failed to get tensor data");
+
+//       for (size_t i = 0; i < 256; ++i) {
+//         lut_values[i] = tensor_data[i];
+//       }
+//     }
+//     else if (tensor_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64) {
+//       // If the tensor is INT64 (what you were handling before)
+//       const int64_t* tensor_data;
+//       CUSTOM_ENFORCE(api->GetTensorMutableData(lut_tensor, (void**)&tensor_data) == nullptr,
+//                   "Failed to get tensor data");
+
+//       for (size_t i = 0; i < 256; ++i) {
+//         lut_values[i] = static_cast<int8_t>(tensor_data[i]);
+//       }
+//     }
+//     else {
+//       // Error for unsupported types
+//       CUSTOM_ENFORCE(false, "Unsupported tensor type for LUT attribute");
+//     }
+
+//     // Print debug values to verify correct loading
+//     std::cout << "LUT verification:" << std::endl;
+//     std::cout << "LUT[0]=" << static_cast<int>(lut_values[0]) << std::endl;  // Should be 127
+//     std::cout << "LUT[128]=" << static_cast<int>(lut_values[128]) << std::endl;  // Should be -1
+//     std::cout << "LUT[255]=" << static_cast<int>(lut_values[255]) << std::endl;  // Should be -128
+
+//     // Clean up
+//     api->ReleaseTensorTypeAndShapeInfo(shape_info);
+//     api->ReleaseValue(lut_tensor);
+//   }
+
+//   Ort::Status Compute(const Ort::Custom::Tensor<int8_t>& input,
+//                    Ort::Custom::Tensor<int8_t>& output) {
+//     auto input_shape = input.Shape();
+//     auto input_data = input.Data();
+//     auto output_data = output.Allocate(input_shape);
+
+//     for (int64_t i = 0; i < input.NumberOfElement(); ++i) {
+//       // Convert to unsigned char first to handle negative values correctly
+//       // uint8_t index = static_cast<uint8_t>(input_data[i]) + 128;
+//       uint8_t index = static_cast<uint8_t>(input_data[i]) + 128;
+//       output_data[i] = lut_values[index];
+//     }
+
+//     return Ort::Status{nullptr};
+//   }
+// };
 
 void RegisterOps(Ort::CustomOpDomain& domain) {
   static const std::unique_ptr<OrtLiteCustomOp> c_CustomOpOne{Ort::Custom::CreateLiteCustomOp<KernelOne>("CustomOpOne", "CPUExecutionProvider")};
@@ -487,9 +600,12 @@ void RegisterOps(Ort::CustomOpDomain& domain) {
   static const std::unique_ptr<OrtLiteCustomOp> c_AtterTesterIntFloat{Ort::Custom::CreateLiteCustomOp("AttrTesterIntFloat", "CPUExecutionProvider", AttrTesterIntFloatCompute, AttrTesterIntFloatShapeInfer)};
   static const AttrTesterStringOp c_AtterTesterString;
 
+  static const LookupTableOp c_LookupTable;
+
+
   // Register the LookupTable custom op
   // static const std::unique_ptr<OrtLiteCustomOp> c_LookupTable{Ort::Custom::CreateLiteCustomOp("LookupTable", "CPUExecutionProvider", LookupTable)};
-  static const std::unique_ptr<OrtLiteCustomOp> c_LookupTable{Ort::Custom::CreateLiteCustomOp<LookupTableKernel>("LookupTable", "CPUExecutionProvider")};
+  // ***static const std::unique_ptr<OrtLiteCustomOp> c_LookupTable{Ort::Custom::CreateLiteCustomOp<LookupTableKernel>("LookupTable", "CPUExecutionProvider")};
   // static const std::unique_ptr<Ort::Custom::OrtLiteCustomOp> c_LookupTable{Ort::Custom::CreateLiteCustomOp<LookupTableKernel>("LookupTable", "CPUExecutionProvider")};
   std::cout << "Registered LookupTable" << std::endl;
 #if !defined(DISABLE_FLOAT8_TYPES)
@@ -509,7 +625,8 @@ void RegisterOps(Ort::CustomOpDomain& domain) {
   domain.Add(c_CopyTensorArrayCombined.get());
   domain.Add(c_AtterTesterIntFloat.get());
   domain.Add(&c_AtterTesterString);
-  domain.Add(c_LookupTable.get()); // Add the LookupTable custom op
+  domain.Add(&c_LookupTable);
+  // domain.Add(c_LookupTable.get()); // Add the LookupTable custom op
 
 
 #if !defined(DISABLE_FLOAT8_TYPES)
