@@ -168,6 +168,22 @@ MlasGemmQuantKernel(
     bool ZeroMode
 );
 
+template<typename KernelType>
+size_t
+MlasGemmQuantKernelFixedPoint(
+    const typename KernelType::PackedAType* A,
+    const typename KernelType::PackedBType* B,
+    int32_t* C,
+    size_t PackedCountK,
+    size_t CountM,
+    size_t CountN,
+    size_t ldc,
+    const int32_t* RowSumBuffer,
+    const int32_t* ColumnSumBuffer,
+    const int32_t* ZeroPointB,
+    bool ZeroMode
+);
+
 /**
  * @brief Usually a wrapper of assembly/intrinsic kernel
  *        of symmetric quant gemm

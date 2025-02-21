@@ -19,11 +19,23 @@ Abstract:
 --*/
 
 #include "mlasi.h"
+#include <iostream>
+
+#include <cmath>
+#include <cstdlib>
+#include <vector>
+#include <cassert>
+#include <type_traits>
+#include <algorithm>
+#include <numeric>
+#include <iterator>
 
 #if defined(MLAS_NEON64_INTRINSICS) || defined(MLAS_SSE2_INTRINSICS) || \
-    defined(MLAS_LSX_INTRINSICS)
+    defined(MLAS_LSX_INTRINSICS) || defined(MLAS_SSE41_INTRINSICS)
 
 #include <type_traits>
+
+#include "qfunctions_helper.h"
 
 //
 // QuantizeLinear implementation using NEON or SSE2 intrinsics.
@@ -1023,7 +1035,7 @@ MlasRequantizeOutput(
     size_t CountN
     )
 {
-    const __m128 PerMatrixScaleVector = PerColumnScale ? _mm_setzero_ps() : _mm_load1_ps(Scale);
+    const __m128 PerMatrixScaleVector = PerColumnScale ? _mm_setzero_ps() : _mm_load1_ps(Scale); // _mm_load1_ps loads one float into 4 words
     const __m128 MinimumValueVector = _mm_set1_ps(float(std::numeric_limits<OutputType>::lowest() - ZeroPoint));
     const __m128 MaximumValueVector = _mm_set1_ps(float(std::numeric_limits<OutputType>::max() - ZeroPoint));
     const __m128i ZeroPointVector = _mm_set1_epi32(ZeroPoint);
@@ -2047,6 +2059,93 @@ MlasRequantizeOutput(
 
 #endif
 
+template <typename OutputType>
+void
+MLASCALL
+MlasRequantizeOutputFixedPoint(
+    const int32_t* Input,
+    size_t InputLeadingDimension,
+    OutputType* Output,
+    size_t OutputLeadingDimension,
+    const int32_t* Bias,
+    const float* Scale,
+    bool PerColumnScale,
+    OutputType ZeroPoint,
+    size_t StartM,
+    size_t StartN,
+    size_t CountM,
+    size_t CountN
+    )
+{
+    // New MlasRequantizeOuput but for fixed point not floating point
+    // Floating point conversion to fixed point is multiply by 2**n where n is the number of decimal places
+    // Then, interpret this number as a 32 bit int
+    // Need to wrap into vector to use function scalarToQfp
+    std::vector<float> ScaleValueVec = {*Scale};  // Create single-element vector
+    auto p = dataToQfp(ScaleValueVec, -1, 32, false); // Returns std::make_pair(qfp, fracBits)
+    int fracBits = p.second;
+    int mulScale = fracBits - 2;
+
+    int64_t* fpScale = new int64_t;
+    *fpScale = static_cast<int64_t>(*Scale * (1LL << fracBits));
+
+    const int32_t PerMatrixScaleValue = PerColumnScale ? 0 : static_cast<int32_t>(*fpScale);
+    const int32_t MinimumValue = std::numeric_limits<OutputType>::lowest();
+    const int32_t MaximumValue = std::numeric_limits<OutputType>::max();
+
+
+    if (nullptr != Bias) {
+        Bias += StartN;
+    }
+    if (PerColumnScale) {
+        fpScale += StartN;
+    }
+
+    Input += StartM * InputLeadingDimension + StartN;
+    Output += StartM * OutputLeadingDimension + StartN;
+
+    //
+    // Step through each row of the output matrix.
+    //
+
+    while (CountM-- > 0) {
+
+        const int32_t* bias = Bias;
+        const int64_t* fpscale = fpScale;
+        size_t n = CountN;
+
+        auto* RowInput = Input;
+        auto* RowOutput = Output;
+
+        while (n > 0) {
+
+            int32_t IntegerValue = *RowInput++;
+
+            if (bias != nullptr) {
+               IntegerValue += *bias++;
+            }
+
+            int64_t ScaleValue = PerColumnScale ? *fpscale++ : PerMatrixScaleValue;
+
+            int64_t largeInt = static_cast<int64_t>(IntegerValue) * ScaleValue; // This is a 29 fixed point
+            largeInt = largeInt >> mulScale;
+            IntegerValue = customRound<2>(static_cast<int32_t>(largeInt));
+            int32_t Intermediate = IntegerValue + ZeroPoint;
+            Intermediate = std::max(Intermediate, MinimumValue);
+            Intermediate = std::min(Intermediate, MaximumValue);
+
+            *RowOutput++ = OutputType(Intermediate);
+
+            n -= 1;
+        }
+
+        // Next Row
+        Input += InputLeadingDimension;
+        Output += OutputLeadingDimension;
+    }
+    delete fpScale;
+}
+
 template
 void
 MLASCALL
@@ -2069,6 +2168,42 @@ template
 void
 MLASCALL
 MlasRequantizeOutput<uint8_t>(
+    const int32_t* Input,
+    size_t InputLeadingDimension,
+    uint8_t* Output,
+    size_t OutputLeadingDimension,
+    const int32_t* Bias,
+    const float* Scale,
+    bool PerColumnScale,
+    uint8_t ZeroPoint,
+    size_t StartM,
+    size_t StartN,
+    size_t CountM,
+    size_t CountN
+    );
+
+template
+void
+MLASCALL
+MlasRequantizeOutputFixedPoint<int8_t>(
+    const int32_t* Input,
+    size_t InputLeadingDimension,
+    int8_t* Output,
+    size_t OutputLeadingDimension,
+    const int32_t* Bias,
+    const float* Scale,
+    bool PerColumnScale,
+    int8_t ZeroPoint,
+    size_t StartM,
+    size_t StartN,
+    size_t CountM,
+    size_t CountN
+    );
+
+template
+void
+MLASCALL
+MlasRequantizeOutputFixedPoint<uint8_t>(
     const int32_t* Input,
     size_t InputLeadingDimension,
     uint8_t* Output,

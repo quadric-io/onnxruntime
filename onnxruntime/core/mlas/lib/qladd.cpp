@@ -19,6 +19,23 @@ Abstract:
 --*/
 
 #include "qladd.h"
+// #include "qfunctions_helper.h"
+
+#include "mlasi.h"
+#include <iostream>
+
+#include <cmath>
+#include <cstdlib>
+#include <vector>
+#include <cassert>
+#include <type_traits>
+#include <algorithm>
+#include <numeric>
+#include <iterator>
+#include <type_traits>
+
+#include "qfunctions_helper.h"
+
 
 // Pure C++ helper, back off here in rare case.
 template<typename DataType, bool IsScalarB>
@@ -55,6 +72,69 @@ MlasQLinearAddKernelRawHelper(
         float ValueC = (ValueA + ValueB) / ScaleC;
         ValueC = std::min(std::max(ValueC, MinimumValue), MaximumValue);
         OutputC[n] = (DataType)(int32_t)std::nearbyintf(ValueC + ZeroPointC);
+    }
+}
+
+template<typename DataType, bool IsScalarB>
+MLAS_FORCEINLINE
+static
+void
+MlasQLinearAddKernelRawHelperFixedPoint(
+    const DataType* InputA,
+    float ScaleA,
+    int32_t ZeroPointA,
+    const DataType* InputB,
+    float ScaleB,
+    int32_t ZeroPointB,
+    float ScaleC,
+    int32_t ZeroPointC,
+    DataType* OutputC,
+    size_t N
+    )
+{
+    int dequant_frac_bits = 16; // hard coded in tvm python
+
+    std::vector<double> ScaleValueVecA = {ScaleA/ScaleC};  // Create single-element vector
+    auto pairA = dataToQfp(ScaleValueVecA, -1, 32, false); // Returns std::make_pair(qfp, fracBits)
+    int fracBitsA = pairA.second;
+    int mulScaleA = fracBitsA - dequant_frac_bits;
+    int64_t* fpScaleA = new int64_t;
+
+    std::vector<double> ScaleValueVecB = {ScaleB/ScaleC};  // Create single-element vector
+    auto pairB = dataToQfp(ScaleValueVecB, -1, 32, false); // Returns std::make_pair(qfp, fracBits)
+    int fracBitsB = pairB.second;
+    int mulScaleB = fracBitsB - dequant_frac_bits;
+    int64_t* fpScaleB = new int64_t;
+
+    int fracBits = (fracBitsA > fracBitsB) ? fracBitsA : fracBitsB;
+
+    *fpScaleA = static_cast<int64_t>((ScaleA/ScaleC) * (1LL << fracBits));
+    *fpScaleB = static_cast<int64_t>((ScaleB/ScaleC) * (1LL << fracBits));
+
+    const int32_t MinimumValue = std::numeric_limits<DataType>::lowest();
+    const int32_t MaximumValue = std::numeric_limits<DataType>::max();
+
+    int64_t ValueB;
+
+    int mulScale = (fracBitsA > fracBitsB) ? mulScaleA : mulScaleB;
+
+    if (IsScalarB) {
+        ValueB = ((int64_t(InputB[0]) - ZeroPointB) * (*fpScaleB)) >> mulScale;
+    }
+
+    // here
+    for (size_t n = 0; n < N; n++) {
+        int64_t ValueA = ((*fpScaleA) * (int64_t(InputA[n]) - ZeroPointA)) >> mulScale;
+        if (!IsScalarB) {
+            ValueB = ((*fpScaleB) * (int64_t(InputB[n]) - ZeroPointB)) >> mulScale;
+        }
+        int64_t ValueC = ValueA + ValueB;
+
+        // ValueC = ValueC >> mulScaleC;
+        ValueC = customRound<16>(static_cast<int32_t>(ValueC));
+        int32_t ValueCInt = static_cast<int32_t>(ValueC + ZeroPointC);
+        ValueCInt = std::min(std::max(ValueCInt, MinimumValue), MaximumValue);
+        OutputC[n] = (DataType)(ValueCInt);
     }
 }
 
@@ -717,6 +797,33 @@ MlasQLinearAddKernel(
     }
 }
 
+template<typename DataType>
+static
+void
+MLASCALL
+MlasQLinearAddKernelFixedPoint(
+    const DataType* InputA,
+    float ScaleA,
+    int32_t ZeroPointA,
+    const DataType* InputB,
+    float ScaleB,
+    int32_t ZeroPointB,
+    float ScaleC,
+    int32_t ZeroPointC,
+    DataType* OutputC,
+    size_t N,
+    bool IsScalarB
+    )
+{
+    if (IsScalarB) {
+        MlasQLinearAddKernelRawHelperFixedPoint<DataType, true>(
+            InputA, ScaleA, ZeroPointA, InputB, ScaleB, ZeroPointB, ScaleC, ZeroPointC, OutputC, N);
+    } else {
+        MlasQLinearAddKernelRawHelperFixedPoint<DataType, false>(
+            InputA, ScaleA, ZeroPointA, InputB, ScaleB, ZeroPointB, ScaleC, ZeroPointC, OutputC, N);
+    }
+}
+
 template<>
 void
 MLASCALL
@@ -765,6 +872,46 @@ MlasQLinearAdd<uint8_t>(
         MlasQLinearAddKernel<uint8_t>(
 #endif
             InputA, ScaleA, ZeroPointA, InputB, ScaleB, ZeroPointB, ScaleC, ZeroPointC, OutputC, N, IsScalarB);
+}
+
+template<>
+void
+MLASCALL
+MlasQLinearAddFixedPoint<int8_t>(
+    const int8_t* InputA,
+    float ScaleA,
+    int32_t ZeroPointA,
+    const int8_t* InputB,
+    float ScaleB,
+    int32_t ZeroPointB,
+    float ScaleC,
+    int32_t ZeroPointC,
+    int8_t* OutputC,
+    size_t N,
+    bool IsScalarB
+    )
+{
+    MlasQLinearAddKernelFixedPoint<int8_t>(InputA, ScaleA, ZeroPointA, InputB, ScaleB, ZeroPointB, ScaleC, ZeroPointC, OutputC, N, IsScalarB);
+}
+
+template<>
+void
+MLASCALL
+MlasQLinearAddFixedPoint<uint8_t>(
+    const uint8_t* InputA,
+    float ScaleA,
+    int32_t ZeroPointA,
+    const uint8_t* InputB,
+    float ScaleB,
+    int32_t ZeroPointB,
+    float ScaleC,
+    int32_t ZeroPointC,
+    uint8_t* OutputC,
+    size_t N,
+    bool IsScalarB
+    )
+{
+    MlasQLinearAddKernelFixedPoint<uint8_t>(InputA, ScaleA, ZeroPointA, InputB, ScaleB, ZeroPointB, ScaleC, ZeroPointC, OutputC, N, IsScalarB);
 }
 
 //
