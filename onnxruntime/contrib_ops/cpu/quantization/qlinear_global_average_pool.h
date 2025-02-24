@@ -35,5 +35,19 @@ Status ComputeQLinearGlobalAvgPool(
     bool channels_last,
     concurrency::ThreadPool* tp);
 
+template <typename T8Bits>
+Status ComputeQLinearGlobalAvgPoolFixedPoint(
+    const T8Bits* x,
+    float x_scale,
+    T8Bits x_zero_point,
+    T8Bits* y,
+    float y_scale,
+    T8Bits y_zero_point,
+    int64_t N,
+    int64_t C,
+    int64_t image_size,
+    bool channels_last,
+    concurrency::ThreadPool* tp);
+
 }  // namespace contrib
 }  // namespace onnxruntime
