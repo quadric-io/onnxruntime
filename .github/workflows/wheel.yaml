@@ -54,7 +54,7 @@ jobs:
         ref: ${{ inputs.onnxruntime_branch || github.ref }}
     - name: Build ONNX Runtime wheel
       run: |
-        ./build.sh --build_wheel --config Release --parallel ${{ github.event_name == 'pull_request' && ' ' || '--skip_tests'}} --skip_submodule_sync --compile_no_warning_as_error --skip_submodule_sync --apple_deploy_target 12
+        ./build.sh --build_wheel --config Release --parallel --compile_no_warning_as_error --skip_submodule_sync --apple_deploy_target 12
         wheel_path=$(find . -name '*.whl' | xargs readlink -f)
         echo "wheel_path=$wheel_path" >> $GITHUB_ENV
     - name: Upload Artifact
