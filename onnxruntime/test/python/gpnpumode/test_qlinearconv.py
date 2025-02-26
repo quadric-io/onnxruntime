@@ -12,7 +12,8 @@ from onnx import helper, TensorProto
 import os
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from helper import generate_normal_inputs, get_onnx_constant
+from helper import generate_normal_inputs
+from helper_onnx import get_onnx_const
 
 x_scale, x_zp = 0.018654844, -14
 w_scale, w_zp = 0.044774472, 0
