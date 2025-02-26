@@ -12,7 +12,7 @@ from onnx import helper, TensorProto
 import os
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from helper import generate_normal_inputs
+from helper import generate_normal_inputs, get_onnx_constant
 
 x_scale, x_zp = 0.018654844, -14
 w_scale, w_zp = 0.044774472, 0
@@ -152,18 +152,6 @@ def get_onnx_linear_conv(
         )
 
     return conv, out, initializers
-
-def get_onnx_const(name, val, dtype=None):
-    if isinstance(val, np.ndarray):
-        dtype = onnx.mapping.NP_TYPE_TO_TENSOR_TYPE[val.dtype]
-        dims = val.shape
-    else:
-        if not dtype:
-            dtype = onnx.TensorProto.INT8 if isinstance(val, int) else onnx.TensorProto.FLOAT
-        dims = ()
-        val = [val]
-
-    return onnx.helper.make_tensor(name=name, data_type=dtype, dims=dims, vals=val)
 
 def get_onnx(
     h,
