@@ -2184,7 +2184,7 @@ MlasRequantizeOutputFixedPoint(
     )
 {
     // New MlasRequantizeOuput but for fixed point not floating point
-    // Floating point conversion to fixed point is multiply by 2**n where n is the number of decimal places
+    // Floating point conversion to fixed point is multiply by 2**n where n is the number of fractional bits
     // Then, interpret this number as a 32 bit int
     // Need to wrap into vector to use function scalarToQfp
     std::vector<float> ScaleValueVec = {*Scale};  // Create single-element vector
@@ -2234,7 +2234,7 @@ MlasRequantizeOutputFixedPoint(
 
             int64_t ScaleValue = PerColumnScale ? *fpscale++ : PerMatrixScaleValue;
 
-            int64_t largeInt = static_cast<int64_t>(IntegerValue) * ScaleValue; // This is a 29 fixed point
+            int64_t largeInt = static_cast<int64_t>(IntegerValue) * ScaleValue;
             largeInt = largeInt >> mulScale;
             IntegerValue = customRound<2>(static_cast<int32_t>(largeInt));
             int32_t Intermediate = IntegerValue + ZeroPoint;
