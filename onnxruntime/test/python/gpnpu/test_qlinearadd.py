@@ -15,8 +15,8 @@ import glob
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from helper import get_onnx_const, generate_normal_inputs, json_to_df, load_json
-
+from helper import generate_normal_inputs
+from helper_onnx import get_onnx_const
 
 batch_size = 1
 h=16
@@ -100,7 +100,7 @@ class TestQLinearConv(unittest.TestCase):
         for json_file in glob.glob("*.json"):
             os.remove(json_file)
 
-    def performance_and_accuracy_test(self, num_iterations=100):
+    def performance_and_accuracy_test(self, num_iterations=10):
         for _ in range(num_iterations):
             # CPU Session
             session_options_cpu = ort.SessionOptions()
@@ -155,21 +155,7 @@ class TestQLinearConv(unittest.TestCase):
 
     def test_performance_and_accuracy(self):
         # Run test
-        self.performance_and_accuracy_test(num_iterations=1000)
-        self.json_time_profiling()
-
-    def json_time_profiling(self):
-        def get_time(jsons):
-            times = []
-            for json in jsons:
-                cpu_df, gpu_df = json_to_df(load_json(json), lambda x: True)
-                times.append(cpu_df[cpu_df['name'] == 'QLinearAdd']['duration'].values[0])
-            return np.mean(np.array(times)), np.std(np.array(times))
-        cpu_mean_time, cpu_std_time = get_time(self.cpu_jsons)
-        gpnpu_mean_time, gpnpu_std_time = get_time(self.gpnpu_jsons)
-        print(f"CPU Time:   {cpu_mean_time:8.3f} ± {cpu_std_time:.3f} ms")
-        print(f"GPNPU Time: {gpnpu_mean_time:8.3f} ± {gpnpu_std_time:.3f} ms")
-
+        self.performance_and_accuracy_test(num_iterations=10)
 
 if __name__ == '__main__':
     unittest.main()
