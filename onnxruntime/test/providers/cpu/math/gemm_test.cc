@@ -383,7 +383,7 @@ class GemmOpTypedTests : public ::testing::Test {
 // On CPUs without fp16 instructions the tests will output a warning:
 // "registered execution providers CPUExecutionProvider were unable to run the model"
 // , then they will still pass.
-using GemmOpTypedTestsTypes = ::testing::Types<float, double>;
+using GemmOpTypedTestsTypes = ::testing::Types<float, double, MLFloat16>;
 TYPED_TEST_SUITE(GemmOpTypedTests, GemmOpTypedTestsTypes);
 
 TYPED_TEST(GemmOpTypedTests, TestGemmScalarBroadcast) {
