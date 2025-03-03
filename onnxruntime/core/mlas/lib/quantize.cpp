@@ -2157,20 +2157,15 @@ MlasRequantizeOutputFixedPoint(
     int fracBits = p.second;
     int mulScale = fracBits - 2;
 
-    int64_t* fpScale = new int64_t;
-    *fpScale = static_cast<int64_t>(*Scale * (1LL << fracBits));
+    int64_t fpScale = static_cast<int64_t>(*Scale * (1LL << fracBits));
 
-
-    const int32_t PerMatrixScaleValue = PerColumnScale ? 0 : static_cast<int32_t>(*fpScale);
+    const int32_t PerMatrixScaleValue = PerColumnScale ? 0 : static_cast<int32_t>(fpScale);
     const int32_t MinimumValue = std::numeric_limits<OutputType>::lowest();
     const int32_t MaximumValue = std::numeric_limits<OutputType>::max();
 
 
     if (nullptr != Bias) {
         Bias += StartN;
-    }
-    if (PerColumnScale) {
-        fpScale += StartN;
     }
 
     Input += StartM * InputLeadingDimension + StartN;
@@ -2183,7 +2178,7 @@ MlasRequantizeOutputFixedPoint(
     while (CountM-- > 0) {
 
         const int32_t* bias = Bias;
-        const int64_t* fpscale = fpScale;
+        const int64_t* fpscale = &fpScale;
         size_t n = CountN;
 
         auto* RowInput = Input;
@@ -2215,7 +2210,7 @@ MlasRequantizeOutputFixedPoint(
         Input += InputLeadingDimension;
         Output += OutputLeadingDimension;
     }
-    delete fpScale;
+
 }
 
 template
