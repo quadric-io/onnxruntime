@@ -94,7 +94,7 @@ MlasQuantizeLinearVector(
 
 // Copying logic from fxRoundPosInf in cgc_ccl.hpp for custom round
 template <uint8_t aFracBits>
-inline int32_t customRound(const int32_t a) {
+inline int32_t fxRoundPosInf(const int32_t a) {
     const int32_t zp5 = 1 << (aFracBits - 1);
     return (a + zp5) >> aFracBits;
 }
@@ -2236,7 +2236,7 @@ MlasRequantizeOutputFixedPoint(
 
             int64_t largeInt = static_cast<int64_t>(IntegerValue) * ScaleValue;
             largeInt = largeInt >> mulScale;
-            IntegerValue = customRound<2>(static_cast<int32_t>(largeInt));
+            IntegerValue = fxRoundPosInf<2>(static_cast<int32_t>(largeInt));
             int32_t Intermediate = IntegerValue + ZeroPoint;
             Intermediate = std::max(Intermediate, MinimumValue);
             Intermediate = std::min(Intermediate, MaximumValue);
