@@ -142,48 +142,17 @@ template <typename T>
 std::pair<std::vector<int>, int> dataToQfp(
     const std::vector<T>& data, int fracBits = -1, int qfpSize = 32, bool scalarAsFloat = true
 ) {
-    auto deriveFractionalBits = [qfpSize](float scalar) {
-        int valueBits = qfpSize - 1;
-
-        float intPart;
-        ::modff(scalar, &intPart);
-        intPart = std::abs(intPart);
-
-        int intBits = (intPart == 0) ? 0 : static_cast<int>(std::log2f(intPart)) + 1;
-        int fracBits = valueBits - intBits;
-
-        assert(fracBits >= 0 && "Scalar cannot be represented in qfp format.");
-
-        return fracBits;
-    };
-
-    auto scalarToQfp = [](float value, int fracBits) {
-        float frac, integer;
-        frac = ::modff(value, &integer);
-
-        integer = static_cast<int>(std::abs(integer)) << fracBits;
-        frac = std::roundf(std::abs(frac) * (1 << fracBits));
-
-        int qfp = static_cast<int>(integer + frac);
-        if (value < 0) {
-            qfp *= -1;
-        }
-
-        return qfp;
-    };
-
     std::vector<int> qfp;
     if (data.size() != 1) {
         if (fracBits == -1) {
-            fracBits = deriveFractionalBits(*std::max_element(data.begin(), data.end(), [](T a, T b) { return std::abs(a) < std::abs(b); }));
+            fracBits = deriveFractionalBits(*std::max_element(data.begin(), data.end(), [](T a, T b) { return std::abs(a) < std::abs(b); }), qfpSize);
         }
         qfp.reserve(data.size());
-        std::transform(data.begin(), data.end(), std::back_inserter(qfp), [fracBits, &scalarToQfp](T value) {
-            return scalarToQfp(value, fracBits);
-        });
+        std::transform(data.begin(), data.end(), std::back_inserter(qfp),
+        [fracBits](T value) { return scalarToQfp(value, fracBits); });
     } else { // data is not really a vector, but we considered everything a vector in our declaration
         if (fracBits == -1) {
-            fracBits = deriveFractionalBits(data[0]);
+            fracBits = deriveFractionalBits(data[0], qfpSize);
         }
         if (scalarAsFloat) {
             // **In the case where the value is an immediate return
