@@ -155,12 +155,8 @@ std::pair<std::vector<int>, int> dataToQfp(
             fracBits = deriveFractionalBits(data[0], qfpSize);
         }
         if (scalarAsFloat) {
-            // **In the case where the value is an immediate return
-            // it as float to be consumed directly by the codegen** from epu_fx_util.py
             qfp.push_back(static_cast<int>(data[0]));
         } else {
-            // **Case when converting to integer constant in Relay to enable
-            // post quantized CPU inference** from epu_fx_util.py
             qfp.push_back(scalarToQfp(data[0], fracBits));
         }
     }
