@@ -2154,7 +2154,7 @@ def run_onnxruntime_tests(args, source_dir, ctest_path, build_dir, configs):
                         [sys.executable, "-m", "unittest", "discover", "-s", "quantization"], cwd=cwd, dll_path=dll_path
                     )
                     run_subprocess(
-                        [sys.executable, "-m", "unittest", "discover", "-s", "gpnpumode"], cwd=cwd, dll_path=dll_path
+                        [sys.executable, "-m", "unittest", "discover", "-s", "gpnpu"], cwd=cwd, dll_path=dll_path
                     )
                     if args.enable_transformers_tool_test:
                         import google.protobuf
