@@ -12,11 +12,11 @@ output_tensor = helper.make_tensor_value_info('output', TensorProto.INT32, [3])
 
 
 dq_s_frac_bits_value = 30
-dq_s_value = 0.10242629051208496
+dq_s_value = (0.10242629051208496)*2**dq_s_frac_bits_value
 dq_zp_value = 5
 dq_output_frac_bits_value = 16
 
-dq_s = onnx.helper.make_tensor(name="dq_s", data_type=onnx.TensorProto.FLOAT, dims=(), vals=[dq_s_value])
+dq_s = onnx.helper.make_tensor(name="dq_s", data_type=onnx.TensorProto.INT32, dims=(), vals=[dq_s_value])
 dq_s_frac_bits = onnx.helper.make_tensor(name="dq_s_frac_bits", data_type=onnx.TensorProto.INT8, dims=(), vals=[dq_s_frac_bits_value])
 dq_zp = onnx.helper.make_tensor(name="dq_zp", data_type=onnx.TensorProto.INT8, dims=(), vals=[dq_zp_value])
 dq_output_frac_bits = onnx.helper.make_tensor(name="dq_output_frac_bits", data_type=onnx.TensorProto.INT8, dims=(), vals=[dq_output_frac_bits_value])
@@ -49,18 +49,25 @@ onnx_model_path = 'quantize_linear_fixed_point.onnx'
 onnx.save(onnx_model, onnx_model_path)
 
 
+def fx_mulitply(A, A_fp, B, B_fp, C_fp):
+    shift = A_fp + B_fp - C_fp
+    return (A * B) >> shift
+
 # Register the custom op
 @onnx_op(op_type="DequantizeLinearFixedPoint",
             inputs=[
-                PyCustomOpDef.dt_int8,
-                PyCustomOpDef.dt_float,
-                PyCustomOpDef.dt_int8,
+                PyCustomOpDef.dt_int8, # x
+                PyCustomOpDef.dt_int32, # s
+                PyCustomOpDef.dt_int8, # s_frac_bits
+                PyCustomOpDef.dt_int8, # zp
+                PyCustomOpDef.dt_int8, # output_frac_bits
                 PyCustomOpDef.dt_int8
             ],
             outputs=[PyCustomOpDef.dt_int32])
-def dequantize_linear_fixed_point(x, s, zp, frac_bits):
-    y_float = (x - zp) * s # floating point representation
-    y_fixed = (y_float * 2.**frac_bits).astype(np.int32) # fixed point representation
+def dequantize_linear_fixed_point(x, s, s_frac_bits, zp, output_frac_bits):
+    y_temp = x.astype(np.int32) - zp.astype(np.int32)  # floating point representation
+    y_temp = y_temp * s # in s_frac_bits
+    y_fixed = (y_temp << (output_frac_bits - s_frac_bits)).astype(np.int32) # fixed point representation
     return y_fixed
 
 # Run model
