@@ -12,7 +12,7 @@ output_tensor = helper.make_tensor_value_info('output', TensorProto.INT32, [3])
 
 
 dq_s_frac_bits_value = 30
-dq_s_value = (0.10242629051208496)*2**dq_s_frac_bits_value
+dq_s_value = np.int32((0.10242629051208496)*2**dq_s_frac_bits_value)
 dq_zp_value = 5
 dq_output_frac_bits_value = 16
 
@@ -23,7 +23,7 @@ dq_output_frac_bits = onnx.helper.make_tensor(name="dq_output_frac_bits", data_t
 
 node = helper.make_node(
     'DequantizeLinearFixedPoint',  # Custom op name
-    inputs=['input', 'dq_s', 'dq_zp','dq_output_frac_bits'],
+    inputs=['input', 'dq_s', 'dq_s_frac_bits','dq_zp','dq_output_frac_bits'],
     outputs=['output'],
     domain='ai.onnx.contrib',  # Custom domain
 )
@@ -33,7 +33,7 @@ graph = helper.make_graph(
     'test_graph',
     [input_tensor],
     [output_tensor],
-    initializer=[dq_s, dq_zp, dq_output_frac_bits]
+    initializer=[dq_s, dq_s_frac_bits, dq_zp, dq_output_frac_bits]
 )
 
 # Add opset import for the custom domain
@@ -61,13 +61,16 @@ def fx_mulitply(A, A_fp, B, B_fp, C_fp):
                 PyCustomOpDef.dt_int8, # s_frac_bits
                 PyCustomOpDef.dt_int8, # zp
                 PyCustomOpDef.dt_int8, # output_frac_bits
-                PyCustomOpDef.dt_int8
             ],
             outputs=[PyCustomOpDef.dt_int32])
 def dequantize_linear_fixed_point(x, s, s_frac_bits, zp, output_frac_bits):
     y_temp = x.astype(np.int32) - zp.astype(np.int32)  # floating point representation
     y_temp = y_temp * s # in s_frac_bits
-    y_fixed = (y_temp << (output_frac_bits - s_frac_bits)).astype(np.int32) # fixed point representation
+    shift = output_frac_bits - s_frac_bits
+    if shift < 0:
+        y_fixed = y_temp >> -shift
+    else:
+        y_fixed = y_temp << shift
     return y_fixed
 
 # Run model
