@@ -31,7 +31,7 @@ Abstract:
 #include <iterator>
 
 #if defined(MLAS_NEON64_INTRINSICS) || defined(MLAS_SSE2_INTRINSICS) || \
-    defined(MLAS_LSX_INTRINSICS) || defined(MLAS_SSE41_INTRINSICS)
+    defined(MLAS_LSX_INTRINSICS)
 
 #include <type_traits>
 
