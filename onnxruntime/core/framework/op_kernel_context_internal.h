@@ -42,6 +42,11 @@ class OpKernelContextInternal : public OpKernelContext {
     return session_state_.GetUseDeterministicCompute();
   }
 
+  // Add a getter method for session_state_
+  const SessionState& GetSessionState() const {
+    return session_state_;
+  }
+
   const SessionState* SubgraphSessionState(const std::string& attribute_name) {
     return session_state_.GetSubgraphSessionState(GetNodeIndex(), attribute_name);
   }

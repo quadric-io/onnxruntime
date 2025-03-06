@@ -569,6 +569,56 @@ private:
     MLAS_QUANTIZATION_GRANULARITY QuantGran_;
 };
 
+class MLAS_QGEMM_SCALE_BIAS_OUTPUT_PROCESSOR_FIXEDPOINT : public MLAS_QGEMM_OUTPUT_PROCESSOR {
+public:
+    MLAS_QGEMM_SCALE_BIAS_OUTPUT_PROCESSOR_FIXEDPOINT(
+        float* Output,
+        size_t LeadingDimensionOutput,
+        const float* Scale,
+        const float* Bias,
+        MLAS_QGEMM_OUTPUT_MODE Mode = MLAS_QGEMM_OUTPUT_MODE::ZeroMode,
+        MLAS_QUANTIZATION_GRANULARITY QuantGran = MLAS_QUANTIZATION_GRANULARITY::PerMatrix) :
+            Output_(Output),
+            LeadingDimensionOutput_(LeadingDimensionOutput),
+            Scale_(Scale),
+            Bias_(Bias),
+            OutputMode_(Mode),
+            QuantGran_(QuantGran)
+    {
+    }
+
+    void
+    Process(
+        const int32_t* C,
+        size_t StartM,
+        size_t StartN,
+        size_t CountM,
+        size_t CountN,
+        size_t ldc
+        ) const override;
+
+private:
+    template<bool HasBias, MLAS_QGEMM_OUTPUT_MODE Mode, MLAS_QUANTIZATION_GRANULARITY QuantGran>
+    inline
+    void
+    ProcessImpl(
+        const int32_t* C,
+        size_t StartM,
+        size_t StartN,
+        size_t CountM,
+        size_t CountN,
+        size_t ldc
+        ) const;
+
+private:
+    float* Output_;
+    size_t LeadingDimensionOutput_;
+    const float* Scale_;
+    const float* Bias_;
+    MLAS_QGEMM_OUTPUT_MODE OutputMode_;
+    MLAS_QUANTIZATION_GRANULARITY QuantGran_;
+};
+
 /**
  * @brief Supply matrices shape and data type information to quantized gemm functions
  *
@@ -1268,6 +1318,24 @@ MlasRequantizeOutput(
     size_t CountN
     );
 
+template<typename OutputType>
+void
+MLASCALL
+MlasRequantizeOutputFixedPoint(
+    const int32_t* Input,
+    size_t InputLeadingDimension,
+    OutputType* Output,
+    size_t OutputLeadingDimension,
+    const int32_t* Bias,
+    const float* Scale,
+    bool PerColumnScale,
+    OutputType ZeroPoint,
+    size_t StartM,
+    size_t StartN,
+    size_t CountM,
+    size_t CountN
+    );
+
 class MLAS_QGEMM_REQUANT_OUTPUT_PROCESSOR : public MLAS_QGEMM_OUTPUT_PROCESSOR
 {
    public:
@@ -1302,6 +1370,56 @@ class MLAS_QGEMM_REQUANT_OUTPUT_PROCESSOR : public MLAS_QGEMM_OUTPUT_PROCESSOR
                                  StartM, StartN, CountM, CountN);
         } else {
             MlasRequantizeOutput(C, ldc, reinterpret_cast<uint8_t*>(Output_), OutputLeadingDimension_,
+                                 Bias_, Scale_, PerColumnScale_, static_cast<uint8_t>(ZeroPoint_),
+                                 StartM, StartN, CountM, CountN);
+        }
+    }
+
+
+   private:
+    void* Output_;
+    size_t OutputLeadingDimension_;
+    const int32_t* Bias_;
+    const float* Scale_;
+    bool PerColumnScale_;
+    int32_t ZeroPoint_;
+    bool OutputIsSigned_;
+};
+
+class MLAS_QGEMM_REQUANT_OUTPUT_PROCESSOR_FIXEDPOINT : public MLAS_QGEMM_OUTPUT_PROCESSOR
+{
+   public:
+    MLAS_QGEMM_REQUANT_OUTPUT_PROCESSOR_FIXEDPOINT(
+        void* Output,
+        size_t OutputLeadingDimension,
+        const int32_t* Bias,
+        const float* Scale,
+        bool PerColumnScale,
+        int32_t ZeroPoint,
+        bool OutputIsSigned)
+        : Output_(Output),
+          OutputLeadingDimension_(OutputLeadingDimension),
+          Bias_(Bias),
+          Scale_(Scale),
+          PerColumnScale_(PerColumnScale),
+          ZeroPoint_(ZeroPoint),
+          OutputIsSigned_(OutputIsSigned)
+    {
+    }
+
+    void Process(const int32_t* C,
+                 size_t StartM,
+                 size_t StartN,
+                 size_t CountM,
+                 size_t CountN,
+                 size_t ldc) const override
+    {
+        if(OutputIsSigned_){
+            MlasRequantizeOutputFixedPoint(C, ldc, reinterpret_cast<int8_t*>(Output_), OutputLeadingDimension_,
+                                 Bias_, Scale_, PerColumnScale_, static_cast<int8_t>(ZeroPoint_),
+                                 StartM, StartN, CountM, CountN);
+        } else {
+            MlasRequantizeOutputFixedPoint(C, ldc, reinterpret_cast<uint8_t*>(Output_), OutputLeadingDimension_,
                                  Bias_, Scale_, PerColumnScale_, static_cast<uint8_t>(ZeroPoint_),
                                  StartM, StartN, CountM, CountN);
         }
@@ -1368,6 +1486,39 @@ MlasQLinearGlobalAveragePoolNhwc(
     const T8Bits* ZeroBuffer
     );
 
+template<typename T8Bits>
+void
+MLASCALL
+MlasQLinearGlobalAveragePoolNchwFixedPoint(
+    const T8Bits* Input,
+    float ScaleInput,
+    int32_t ZeroPointInput,
+    T8Bits* Output,
+    float ScaleOutput,
+    int32_t ZeroPointOutput,
+    size_t Channels,
+    size_t ImageSize,
+    int32_t* AccumulateBuffer
+    );
+
+template <typename T8Bits>
+void
+MLASCALL
+MlasQLinearGlobalAveragePoolNhwcFixedPoint(
+    const T8Bits* Input,
+    float ScaleInput,
+    int32_t ZeroPointInput,
+    T8Bits* Output,
+    float ScaleOutput,
+    int32_t ZeroPointOutput,
+    size_t Batch,
+    size_t ImageSize,
+    size_t Stride,
+    size_t Channels,
+    int32_t* AccumulateBuffer,
+    const T8Bits* ZeroBuffer
+    );
+
 //
 // InputA is of size N,
 // Input B is of size 1 if IsScalarB == true, otherwise it is of size N
@@ -1376,6 +1527,23 @@ template<typename DataType>
 void
 MLASCALL
 MlasQLinearAdd(
+    const DataType* InputA,
+    float ScaleA,
+    int32_t ZeroPointA,
+    const DataType* InputB,
+    float ScaleB,
+    int32_t ZeroPointB,
+    float ScaleC,
+    int32_t ZeroPointC,
+    DataType* OutputC,
+    size_t N,
+    bool IsScalarB
+    );
+
+template<typename DataType>
+void
+MLASCALL
+MlasQLinearAddFixedPoint(
     const DataType* InputA,
     float ScaleA,
     int32_t ZeroPointA,
