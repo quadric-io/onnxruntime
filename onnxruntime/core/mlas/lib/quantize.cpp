@@ -19,6 +19,16 @@ Abstract:
 --*/
 
 #include "mlasi.h"
+#include <iostream>
+
+#include <cmath>
+#include <cstdlib>
+#include <vector>
+#include <cassert>
+#include <type_traits>
+#include <algorithm>
+#include <numeric>
+#include <iterator>
 
 #if defined(MLAS_NEON64_INTRINSICS) || defined(MLAS_SSE2_INTRINSICS) || \
     defined(MLAS_LSX_INTRINSICS)
@@ -81,6 +91,79 @@ MlasQuantizeLinearVector(
 
     return IntegerVector;
 }
+
+// Copying logic from fxRoundPosInf in cgc_ccl.hpp for custom round
+template <uint8_t aFracBits>
+inline int32_t fxRoundPosInf(const int32_t a) {
+    const int32_t zp5 = 1 << (aFracBits - 1);
+    return (a + zp5) >> aFracBits;
+}
+
+// Copying logic from data_to_qfp in tvm/python/tvm/target/epu_fx_util.py
+// For purposes of calculating number of frac bits needed to represent scale in quantize ops
+
+// Function to derive fractional bits
+int deriveFractionalBits(float scalar, int qfpSize) {
+    int valueBits = qfpSize - 1;
+
+    float intPart;
+    ::modff(scalar, &intPart); // Returns the frac part which we dont care about, int part gets stored in pointer
+    intPart = std::abs(intPart);
+
+    int intBits = (intPart == 0) ? 0 : static_cast<int>(std::log2f(intPart)) + 1;
+    int fracBits = valueBits - intBits;
+
+    assert(fracBits >= 0 && "Scalar cannot be represented in qfp format.");
+
+    return fracBits;
+}
+
+// Function to convert scalar to qfp
+int scalarToQfp(float value, int fracBits) {
+    float frac, integer;
+    frac = ::modff(value, &integer);
+
+    integer = static_cast<int>(std::abs(integer)) << fracBits;
+    frac = std::roundf(std::abs(frac) * (1 << fracBits));
+
+    int qfp = static_cast<int>(integer + frac);
+    if (value < 0) {
+        qfp *= -1;
+    }
+
+    return qfp;
+}
+
+// Function to convert data to qfp
+// In quantize.cpp, we want to pass in scale, which is a pointer to a float
+// Here the function accepts a vector (because if it were a pointer we would have to pass in size also)
+// When using this we can just turn whatever into std::vector<T> before passing in
+template <typename T>
+std::pair<std::vector<int>, int> dataToQfp(
+    const std::vector<T>& data, int fracBits = -1, int qfpSize = 32, bool scalarAsFloat = true
+) {
+    std::vector<int> qfp;
+    if (data.size() != 1) {
+        if (fracBits == -1) {
+            fracBits = deriveFractionalBits(*std::max_element(data.begin(), data.end(), [](T a, T b) { return std::abs(a) < std::abs(b); }), qfpSize);
+        }
+        qfp.reserve(data.size());
+        std::transform(data.begin(), data.end(), std::back_inserter(qfp),
+        [fracBits](T value) { return scalarToQfp(value, fracBits); });
+    } else { // data is not really a vector, but we considered everything a vector in our declaration
+        if (fracBits == -1) {
+            fracBits = deriveFractionalBits(data[0], qfpSize);
+        }
+        if (scalarAsFloat) {
+            qfp.push_back(static_cast<int>(data[0]));
+        } else {
+            qfp.push_back(scalarToQfp(data[0], fracBits));
+        }
+    }
+
+    return std::make_pair(qfp, fracBits);
+}
+
 
 template<typename OutputType>
 MLAS_INT32X4
@@ -1023,7 +1106,7 @@ MlasRequantizeOutput(
     size_t CountN
     )
 {
-    const __m128 PerMatrixScaleVector = PerColumnScale ? _mm_setzero_ps() : _mm_load1_ps(Scale);
+    const __m128 PerMatrixScaleVector = PerColumnScale ? _mm_setzero_ps() : _mm_load1_ps(Scale); // _mm_load1_ps loads one float into 4 words
     const __m128 MinimumValueVector = _mm_set1_ps(float(std::numeric_limits<OutputType>::lowest() - ZeroPoint));
     const __m128 MaximumValueVector = _mm_set1_ps(float(std::numeric_limits<OutputType>::max() - ZeroPoint));
     const __m128i ZeroPointVector = _mm_set1_epi32(ZeroPoint);
@@ -2047,6 +2130,89 @@ MlasRequantizeOutput(
 
 #endif
 
+template <typename OutputType>
+void
+MLASCALL
+MlasRequantizeOutputFixedPoint(
+    const int32_t* Input,
+    size_t InputLeadingDimension,
+    OutputType* Output,
+    size_t OutputLeadingDimension,
+    const int32_t* Bias,
+    const float* Scale,
+    bool PerColumnScale,
+    OutputType ZeroPoint,
+    size_t StartM,
+    size_t StartN,
+    size_t CountM,
+    size_t CountN
+    )
+{
+    // New MlasRequantizeOuput but for fixed point not floating point
+    // Floating point conversion to fixed point is multiply by 2**n where n is the number of fractional bits
+    // Then, interpret this number as a 32 bit int
+    // Need to wrap into vector to use function scalarToQfp
+    std::vector<float> ScaleValueVec = {*Scale};  // Create single-element vector
+    auto p = dataToQfp(ScaleValueVec, -1, 32, false); // Returns std::make_pair(qfp, fracBits)
+    int fracBits = p.second;
+    int mulScale = fracBits - 2;
+
+    int64_t fpScale = static_cast<int64_t>(*Scale * (1LL << fracBits));
+
+    const int32_t PerMatrixScaleValue = PerColumnScale ? 0 : static_cast<int32_t>(fpScale);
+    const int32_t MinimumValue = std::numeric_limits<OutputType>::lowest();
+    const int32_t MaximumValue = std::numeric_limits<OutputType>::max();
+
+
+    if (nullptr != Bias) {
+        Bias += StartN;
+    }
+
+    Input += StartM * InputLeadingDimension + StartN;
+    Output += StartM * OutputLeadingDimension + StartN;
+
+    //
+    // Step through each row of the output matrix.
+    //
+
+    while (CountM-- > 0) {
+
+        const int32_t* bias = Bias;
+        const int64_t* fpscale = &fpScale;
+        size_t n = CountN;
+
+        auto* RowInput = Input;
+        auto* RowOutput = Output;
+
+        while (n > 0) {
+
+            int32_t IntegerValue = *RowInput++;
+
+            if (bias != nullptr) {
+               IntegerValue += *bias++;
+            }
+
+            int64_t ScaleValue = PerColumnScale ? *fpscale++ : PerMatrixScaleValue;
+
+            int64_t largeInt = static_cast<int64_t>(IntegerValue) * ScaleValue;
+            largeInt = largeInt >> mulScale;
+            IntegerValue = fxRoundPosInf<2>(static_cast<int32_t>(largeInt));
+            int32_t Intermediate = IntegerValue + ZeroPoint;
+            Intermediate = std::max(Intermediate, MinimumValue);
+            Intermediate = std::min(Intermediate, MaximumValue);
+
+            *RowOutput++ = OutputType(Intermediate);
+
+            n -= 1;
+        }
+
+        // Next Row
+        Input += InputLeadingDimension;
+        Output += OutputLeadingDimension;
+    }
+
+}
+
 template
 void
 MLASCALL
@@ -2069,6 +2235,42 @@ template
 void
 MLASCALL
 MlasRequantizeOutput<uint8_t>(
+    const int32_t* Input,
+    size_t InputLeadingDimension,
+    uint8_t* Output,
+    size_t OutputLeadingDimension,
+    const int32_t* Bias,
+    const float* Scale,
+    bool PerColumnScale,
+    uint8_t ZeroPoint,
+    size_t StartM,
+    size_t StartN,
+    size_t CountM,
+    size_t CountN
+    );
+
+template
+void
+MLASCALL
+MlasRequantizeOutputFixedPoint<int8_t>(
+    const int32_t* Input,
+    size_t InputLeadingDimension,
+    int8_t* Output,
+    size_t OutputLeadingDimension,
+    const int32_t* Bias,
+    const float* Scale,
+    bool PerColumnScale,
+    int8_t ZeroPoint,
+    size_t StartM,
+    size_t StartN,
+    size_t CountM,
+    size_t CountN
+    );
+
+template
+void
+MLASCALL
+MlasRequantizeOutputFixedPoint<uint8_t>(
     const int32_t* Input,
     size_t InputLeadingDimension,
     uint8_t* Output,
