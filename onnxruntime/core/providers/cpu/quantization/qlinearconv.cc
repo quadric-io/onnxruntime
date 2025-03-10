@@ -10,6 +10,7 @@
 #include "core/util/math_cpuonly.h"
 #include "core/util/qmath.h"
 #include "core/mlas/inc/mlas.h"
+#include "core/framework/op_kernel_context_internal.h"
 
 namespace onnxruntime {
 
@@ -513,6 +514,15 @@ Status QLinearConv<ActType>::UseSharedPrePackedBuffers(std::vector<BufferUniqueP
 
 template <typename ActType>
 Status QLinearConv<ActType>::Compute(OpKernelContext* context) const {
+  // Cast to internal type because we want to access session_options parameter
+  auto* internal_context = dynamic_cast<OpKernelContextInternal*>(context);
+  if (!internal_context) {
+      return Status(common::ONNXRUNTIME, common::FAIL, "Failed to cast OpKernelContext to OpKernelContextInternal");
+  }
+  const auto& session_options = internal_context->GetSessionState().GetSessionOptions();
+  // Test to see if we have access to enable_gpnpu flag
+  const bool gpnpu_flag = session_options.enable_gpnpu;
+
   const Tensor* X = context->Input<Tensor>(InputTensors::IN_X);
   const Tensor* W = is_W_packed_ ? nullptr : context->Input<Tensor>(InputTensors::IN_W);
   const auto& W_shape = W ? W->Shape() : W_shape_;
@@ -973,8 +983,9 @@ Status QLinearConv<ActType>::Compute(OpKernelContext* context) const {
           }
         }
       }
-
-      MlasRequantizeOutput(
+      if (gpnpu_flag) {
+        // New MlasRequantizeOuput but for fixed point not floating point
+        MlasRequantizeOutputFixedPoint(
           worker_gemm_output,
           static_cast<size_t>(M),
           worker_output,
@@ -987,6 +998,21 @@ Status QLinearConv<ActType>::Compute(OpKernelContext* context) const {
           0,
           static_cast<size_t>(output_count),
           static_cast<size_t>(M));
+      } else {
+        MlasRequantizeOutput(
+          worker_gemm_output,
+          static_cast<size_t>(M),
+          worker_output,
+          static_cast<size_t>(M),
+          Bdata,
+          output_scales.data(),
+          output_scales.size() > 1,
+          Y_zero_point_value,
+          0,
+          0,
+          static_cast<size_t>(output_count),
+          static_cast<size_t>(M));
+      }
     };
 
     concurrency::ThreadPool::TrySimpleParallelFor(thread_pool, onnxruntime::narrow<ptrdiff_t>(task_count), conv_worker);
