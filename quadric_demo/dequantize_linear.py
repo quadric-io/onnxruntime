@@ -47,7 +47,7 @@ onnx_model = helper.make_model(
     graph, opset_imports=[helper.make_operatorsetid('ai.onnx.contrib', 1)], ir_version=7)
 
 # Save the model
-onnx_model_path = 'quantize_linear_fixed_point.onnx'
+onnx_model_path = 'dequantize_linear_fixed_point.onnx'
 onnx.save(onnx_model, onnx_model_path)
 
 # Helpers
@@ -140,15 +140,8 @@ def dequantize_linear_fixed_point(x, s, zp):
     result_frac_bits = get_dequantized_frac_bits(s, zp)
     scale_value, scale_frac_bits = data_to_qfp(s, scalar_as_float=False)
     mul_post_shift = scale_frac_bits - result_frac_bits
-    print("scale_value", scale_value)
-    print("scale_frac_bits", scale_frac_bits)
-    print("mul_post_shift", mul_post_shift)
-    print("result_frac_bits", result_frac_bits)
-
-    y_temp = x.astype(np.int32) - zp.astype(np.int32)  # floating point representation
-    print("y_temp", y_temp)
+    y_temp = x.astype(np.int32) - zp.astype(np.int32)
     y_temp = np.int64(y_temp) * np.int64(scale_value) # in s_frac_bits
-    print("y_temp (2)", y_temp)
     if mul_post_shift > 0:
         y_fixed = y_temp >> mul_post_shift
     else:
