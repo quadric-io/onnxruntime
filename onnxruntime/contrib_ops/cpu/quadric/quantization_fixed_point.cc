@@ -3,10 +3,12 @@
 #include <cmath>  // For log2()
 #include <limits> // For int8_t min/max
 #include <iostream>
-
+#include <iomanip>  // For std::setprecision
 
 namespace onnxruntime {
 namespace contrib {
+
+// --- DequantizeLinearFixedPoint
 
 class DequantizeLinearFixedPoint final : public OpKernel {
  public:
@@ -105,6 +107,96 @@ Status DequantizeLinearFixedPoint::Compute(OpKernelContext* ctx) const {
 
   return Status::OK();
 }
+
+// --- QuantizeLinearFixedPoint
+class QuantizeLinearFixedPoint final : public OpKernel {
+  public:
+   explicit QuantizeLinearFixedPoint(const OpKernelInfo& info) : OpKernel(info) {}
+   Status Compute(OpKernelContext* ctx) const override;
+ };
+
+ // Register Kernel
+ ONNX_OPERATOR_KERNEL_EX(
+     QuantizeLinearFixedPoint,
+     kQuadricDomain,
+     1,
+     kCpuExecutionProvider,
+     KernelDefBuilder()
+         .TypeConstraint("T", DataTypeImpl::GetTensorType<int32_t>())  // Input tensor
+         .TypeConstraint("T1", DataTypeImpl::GetTensorType<int8_t>())  // x_frac_bits
+         .TypeConstraint("T2", DataTypeImpl::GetTensorType<float>())   // Scale
+         .TypeConstraint("T3", DataTypeImpl::GetTensorType<int8_t>())  // Zero-point
+         .TypeConstraint("T4", DataTypeImpl::GetTensorType<int8_t>()), // Output
+     QuantizeLinearFixedPoint);
+
+ // Compute function
+ Status QuantizeLinearFixedPoint::Compute(OpKernelContext* ctx) const {
+   // Get input tensors
+   const auto* X = ctx->Input<Tensor>(0);
+   const auto* x_frac_bits = ctx->Input<Tensor>(1);
+   const auto* scale = ctx->Input<Tensor>(2);
+   const auto* zero_point = ctx->Input<Tensor>(3);
+
+   // Validate inputs
+   ORT_ENFORCE(X != nullptr, "Input X is null");
+   ORT_ENFORCE(x_frac_bits != nullptr, "x_frac_bits is null");
+   ORT_ENFORCE(scale != nullptr, "Scale is null");
+   ORT_ENFORCE(zero_point != nullptr, "Zero point is null");
+
+   // Retrieve input data
+   const int32_t* x_data = X->Data<int32_t>();
+   int8_t x_frac_bits_val = *(x_frac_bits->Data<int8_t>());
+   double s = *(scale->Data<float>());
+   int8_t zp = *(zero_point->Data<int8_t>());
+   std::cout << std::scientific << std::setprecision(15);
+   std::cout << "Scale: " << s << ", Zero Point: " << static_cast<int>(zp) << ", x_frac_bits: " << static_cast<int>(x_frac_bits_val) << std::endl;
+
+   // Compute fixed-point inverse scale
+   double scale_inv = 1.0 / s;
+   std::cout << "Scale Inverse: " << scale_inv << std::endl;
+   int scale_inv_frac_bits = 25;
+   int64_t scale_inv_qfp = static_cast<int64_t>(scale_inv * static_cast<double>(1LL << scale_inv_frac_bits));
+
+   std::cout << "Scale Inverse QFP: " << scale_inv_qfp << std::endl;
+
+   int post_mac_int_bits = 29;
+   int post_mac_frac_bits = 31 - post_mac_int_bits;
+
+   int result_frac_bits = post_mac_frac_bits; // Adjust to desired frac bits
+   int shift = scale_inv_frac_bits + x_frac_bits_val - result_frac_bits;
+   if (shift > 31){
+        shift = 31;
+        result_frac_bits = scale_inv_frac_bits + x_frac_bits_val - 31;
+   }
+
+   std::cout << "Result frac bits: " << result_frac_bits << ", Shift: " << shift << std::endl;
+
+   // Create output tensor
+   auto* Y = ctx->Output(0, X->Shape());
+   int8_t* y_data = Y->MutableData<int8_t>();
+
+   size_t tensor_size = X->Shape().Size();
+
+   // Perform quantization using fixed-point arithmetic
+   for (size_t i = 0; i < tensor_size; ++i) {
+     int64_t product = static_cast<int64_t>(x_data[i]) * scale_inv_qfp;
+
+     // Shift for precision
+     if (shift > 0) {
+         product = product >> shift;
+     } else {
+         product = product << -shift;
+     }
+     std::cout << "Product before round: " << product << std::endl;
+     // Rounding
+     product = (product + (1 << (result_frac_bits - 1))) >> result_frac_bits;
+     std::cout << "Product after round: " << product << std::endl;
+     // Clamp and apply zero-point
+     y_data[i] = static_cast<int8_t>(std::min(std::max(product + zp, static_cast<int64_t>(std::numeric_limits<int8_t>::min())), static_cast<int64_t>(std::numeric_limits<int8_t>::max())));
+   }
+
+   return Status::OK();
+ }
 
 }  // namespace contrib
 }  // namespace onnxruntime

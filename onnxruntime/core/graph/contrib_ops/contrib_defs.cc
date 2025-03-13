@@ -3716,6 +3716,7 @@ GatherBlockQuantized is a Gather with data quantized. It is similar to Gather (h
       .TypeConstraint("T", OpSchema::all_tensor_types_ir4(),
                       "Allow inputs and outputs to be any kind of tensor.");
 
+  // Quadric ops
   ONNX_CONTRIB_OPERATOR_SCHEMA(DequantizeLinearFixedPoint)
   .SetDomain(kQuadricDomain)
   .SinceVersion(1)
@@ -3763,6 +3764,54 @@ GatherBlockQuantized is a Gather with data quantized. It is similar to Gather (h
       auto& input_shape = getInputShape(ctx, 0);
       updateOutputShape(ctx, 0, input_shape);
   });
+
+  ONNX_CONTRIB_OPERATOR_SCHEMA(QuantizeLinearFixedPoint)
+  .SetDomain(kQuadricDomain)
+  .SinceVersion(1)
+  .SetDoc(R"DOC(
+  Quantizes an int32 input tensor into an int8 output tensor using fixed-point arithmetic.
+
+  The quantization formula is:
+
+      Y_q = round(((X * scale_inv_qfp) >> shift) + zero_point)
+
+  where:
+  - `X` is the input tensor in int32 (fixed-point representation).
+  - `scale_inv_qfp` is the inverse of scale in fixed-point format.
+  - `zero_point` is the quantization zero-point.
+  - `Y_q` is the quantized output in int8.
+
+  This operator does **per-tensor quantization**, meaning `scale` and `zero_point` are scalars.
+  )DOC")
+
+  // Inputs
+  .Input(0, "X", "N-D input tensor (int32, fixed-point).", "T")
+  .Input(1, "x_frac_bits", "Fractional bits of input (int8).", "T1")
+  .Input(2, "scale", "Scalar scale factor (float).", "T2")
+  .Input(3, "zero_point", "Scalar zero-point offset (int8).", "T3")
+
+  // Outputs
+  .Output(0, "Y", "N-D output tensor (int8).", "T4")
+
+  // Type Constraints
+  .TypeConstraint("T", {"tensor(int32)"}, "Input tensor must be int32.")
+  .TypeConstraint("T1", {"tensor(int8)"}, "Fractional bits must be int8.")
+  .TypeConstraint("T2", {"tensor(float)"}, "Scale must be a floating-point scalar.")
+  .TypeConstraint("T3", {"tensor(int8)"}, "Zero point must be int8, matching the output tensor type.")
+  .TypeConstraint("T4", {"tensor(int8)"}, "Output tensor is int8.")
+
+  // Shape Inference
+  .TypeAndShapeInferenceFunction([](ONNX_NAMESPACE::InferenceContext& ctx) {
+      auto y_type = ctx.getOutputType(0);
+      y_type->mutable_tensor_type()->set_elem_type(ONNX_NAMESPACE::TensorProto::INT8);
+
+      if (!hasInputShape(ctx, 0))
+          return;
+
+      auto& input_shape = getInputShape(ctx, 0);
+      updateOutputShape(ctx, 0, input_shape);
+  });
+
 
 #ifdef ENABLE_TRAINING_OPS
   // Should remove the shrunken_gather include from ENABLE_TRAINING_OPS once 1). compute optimizer is enabled for inference or

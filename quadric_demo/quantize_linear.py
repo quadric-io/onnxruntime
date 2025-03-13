@@ -31,7 +31,7 @@ node = helper.make_node(
     'QuantizeLinearFixedPoint',  # Custom op name
     inputs=['input','x_frac_bits', 's','zp'],
     outputs=['output'],
-    domain='ai.onnx.contrib'
+    domain='com.quadric'
 )
 
 graph = helper.make_graph(
@@ -45,7 +45,7 @@ graph = helper.make_graph(
 onnx_model = helper.make_model(graph, opset_imports=[
     helper.make_operatorsetid("", 13),  # Standard ONNX domain
     helper.make_operatorsetid("com.microsoft", 1),  # Ensure com.microsoft is explicitly included
-    helper.make_operatorsetid("ai.onnx.contrib", 1)  # Custom domain
+    helper.make_operatorsetid("com.quadric", 1)  # Custom domain
 ], ir_version=7)
 onnx_model_path = 'quantize_linear_fixed_point.onnx'
 onnx.save(onnx_model, onnx_model_path)
@@ -140,7 +140,9 @@ def round_to_pos_inf(x, frac_bits):
             ],
             outputs=[PyCustomOpDef.dt_int8])
 def quantize_linear_fixed_point(x, x_frac_bits, s, zp):
+    print("s", s)
     scale_inv = 1./s
+    print("scale_inv", scale_inv)
     scale_inv_value, scale_inv_frac_bits = data_to_qfp(scale_inv, scalar_as_float=False)
     result_frac_bits = post_mac_frac_bits
     mul_post_shift = scale_inv_frac_bits + x_frac_bits - result_frac_bits
@@ -156,15 +158,16 @@ def quantize_linear_fixed_point(x, x_frac_bits, s, zp):
         y_temp = y_temp >> mul_post_shift
     else:
         y_temp = y_temp << -mul_post_shift
+    print("y_temp (before round)", y_temp)
     y_temp = round_to_pos_inf(y_temp, result_frac_bits)
-    print("y_temp (1)", y_temp)
+    print("y_temp (after round)", y_temp)
     y_fixed = np.int8(np.clip(y_temp + zp, -128, 127))
-    print("y_temp (2)", y_temp)
+    print("y_temp (after clip)", y_temp)
     return y_fixed
 
 # Run model
 so = ort.SessionOptions()
-so.register_custom_ops_library(_get_library_path())
+#so.register_custom_ops_library(_get_library_path())
 sess = ort.InferenceSession(onnx_model_path, so, providers=['CPUExecutionProvider'])
 input = np.array(
     [-128.345, 1.4, 2, 3.4, 127.6]).astype(np.float32)
