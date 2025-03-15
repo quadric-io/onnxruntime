@@ -4,6 +4,7 @@
 #include <limits> // For int8_t min/max
 #include <iostream>
 #include <iomanip>  // For std::setprecision
+#include "core/mlas/inc/mlas.h"
 
 namespace onnxruntime {
 namespace contrib {
@@ -189,12 +190,12 @@ class QuantizeLinearFixedPoint final : public OpKernel {
      }
      std::cout << "Product before round: " << product << std::endl;
      // Rounding
-     product = (product + (1 << (result_frac_bits - 1))) >> result_frac_bits;
-     std::cout << "Product after round: " << product << std::endl;
+     int32_t product_round = fxRoundPosInf(static_cast<int32_t>(product), static_cast<uint8_t>(result_frac_bits));
+     //int64_t product_round = (product + (1 << (result_frac_bits - 1))) >> result_frac_bits;
+     std::cout << "Product after round: " << product_round << std::endl;
      // Clamp and apply zero-point
-     y_data[i] = static_cast<int8_t>(std::min(std::max(product + zp, static_cast<int64_t>(std::numeric_limits<int8_t>::min())), static_cast<int64_t>(std::numeric_limits<int8_t>::max())));
+     y_data[i] = static_cast<int8_t>(std::min(std::max(product_round + zp, static_cast<int32_t>(std::numeric_limits<int8_t>::min())), static_cast<int32_t>(std::numeric_limits<int8_t>::max())));
    }
-
    return Status::OK();
  }
 

@@ -1286,6 +1286,13 @@ MlasRequantizeOutputFixedPoint(
     size_t CountN
     );
 
+int32_t fxRoundPosInf(const int32_t a, uint8_t aFracBits);
+
+template <typename T>
+std::pair<std::vector<int>, int> dataToQfp(
+    const std::vector<T>& data, int fracBits = -1, int qfpSize = 32, bool scalarAsFloat = true
+);
+
 class MLAS_QGEMM_REQUANT_OUTPUT_PROCESSOR : public MLAS_QGEMM_OUTPUT_PROCESSOR
 {
    public:
