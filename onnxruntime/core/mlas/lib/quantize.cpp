@@ -139,7 +139,7 @@ int scalarToQfp(float value, int fracBits) {
 // When using this we can just turn whatever into std::vector<T> before passing in
 template <typename T>
 std::pair<std::vector<int>, int> dataToQfp(
-    const std::vector<T>& data, int fracBits = -1, int qfpSize = 32, bool scalarAsFloat = true
+    const std::vector<T>& data, int fracBits, int qfpSize, bool scalarAsFloat
 ) {
     std::vector<int> qfp;
     if (data.size() != 1) {
@@ -2247,6 +2247,20 @@ MlasRequantizeOutput<uint8_t>(
     size_t CountM,
     size_t CountN
     );
+
+template
+std::pair<std::vector<int>, int>
+dataToQfp<float>(
+    const std::vector<float>& data, int fracBits, int qfpSize, bool scalarAsFloat
+);
+
+template
+std::pair<std::vector<int>, int>
+dataToQfp<double>(
+    const std::vector<double>& data, int fracBits, int qfpSize, bool scalarAsFloat
+);
+
+
 
 template
 void

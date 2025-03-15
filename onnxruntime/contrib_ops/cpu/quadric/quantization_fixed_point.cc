@@ -155,10 +155,19 @@ class QuantizeLinearFixedPoint final : public OpKernel {
    // Compute fixed-point inverse scale
    double scale_inv = 1.0 / s;
    std::cout << "Scale Inverse: " << scale_inv << std::endl;
-   int scale_inv_frac_bits = 25;
-   int64_t scale_inv_qfp = static_cast<int64_t>(scale_inv * static_cast<double>(1LL << scale_inv_frac_bits));
+  //  int scale_inv_frac_bits = 25;
+  //  int64_t scale_inv_qfp = static_cast<int64_t>(scale_inv * static_cast<double>(1LL << scale_inv_frac_bits));
+
+
+    std::vector<double> ScaleValueVec = {scale_inv};  // Create single-element vector
+    auto p = dataToQfp(ScaleValueVec, -1, 32, false); // Returns std::make_pair(qfp, fracBits)
+    int scale_inv_frac_bits = p.second;
+
+    int64_t scale_inv_qfp = static_cast<int64_t>(scale_inv * (1LL << scale_inv_frac_bits));
+
 
    std::cout << "Scale Inverse QFP: " << scale_inv_qfp << std::endl;
+   std::cout << "Scale Inverse frac bits: " << scale_inv_frac_bits << std::endl;
 
    int post_mac_int_bits = 29;
    int post_mac_frac_bits = 31 - post_mac_int_bits;
