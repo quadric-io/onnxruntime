@@ -149,60 +149,38 @@ class QuantizeLinearFixedPoint final : public OpKernel {
    int8_t x_frac_bits_val = *(x_frac_bits->Data<int8_t>());
    double s = *(scale->Data<float>());
    int8_t zp = *(zero_point->Data<int8_t>());
-   std::cout << std::scientific << std::setprecision(15);
-   std::cout << "Scale: " << s << ", Zero Point: " << static_cast<int>(zp) << ", x_frac_bits: " << static_cast<int>(x_frac_bits_val) << std::endl;
 
-   // Compute fixed-point inverse scale
    double scale_inv = 1.0 / s;
-   std::cout << "Scale Inverse: " << scale_inv << std::endl;
-  //  int scale_inv_frac_bits = 25;
-  //  int64_t scale_inv_qfp = static_cast<int64_t>(scale_inv * static_cast<double>(1LL << scale_inv_frac_bits));
-
-
-    std::vector<double> ScaleValueVec = {scale_inv};  // Create single-element vector
+    std::vector<double> ScaleValueVec = {scale_inv};
     auto p = dataToQfp(ScaleValueVec, -1, 32, false); // Returns std::make_pair(qfp, fracBits)
+    int64_t scale_inv_qfp = p.first[0];
     int scale_inv_frac_bits = p.second;
-
-    int64_t scale_inv_qfp = static_cast<int64_t>(scale_inv * (1LL << scale_inv_frac_bits));
-
-
-   std::cout << "Scale Inverse QFP: " << scale_inv_qfp << std::endl;
-   std::cout << "Scale Inverse frac bits: " << scale_inv_frac_bits << std::endl;
 
    int post_mac_int_bits = 29;
    int post_mac_frac_bits = 31 - post_mac_int_bits;
 
-   int result_frac_bits = post_mac_frac_bits; // Adjust to desired frac bits
+   int result_frac_bits = post_mac_frac_bits;
    int shift = scale_inv_frac_bits + x_frac_bits_val - result_frac_bits;
    if (shift > 31){
         shift = 31;
         result_frac_bits = scale_inv_frac_bits + x_frac_bits_val - 31;
    }
 
-   std::cout << "Result frac bits: " << result_frac_bits << ", Shift: " << shift << std::endl;
-
-   // Create output tensor
    auto* Y = ctx->Output(0, X->Shape());
    int8_t* y_data = Y->MutableData<int8_t>();
-
    size_t tensor_size = X->Shape().Size();
-
-   // Perform quantization using fixed-point arithmetic
    for (size_t i = 0; i < tensor_size; ++i) {
      int64_t product = static_cast<int64_t>(x_data[i]) * scale_inv_qfp;
-
-     // Shift for precision
      if (shift > 0) {
          product = product >> shift;
      } else {
          product = product << -shift;
      }
-     std::cout << "Product before round: " << product << std::endl;
+
      // Rounding
      int32_t product_round = fxRoundPosInf(static_cast<int32_t>(product), static_cast<uint8_t>(result_frac_bits));
-     //int64_t product_round = (product + (1 << (result_frac_bits - 1))) >> result_frac_bits;
-     std::cout << "Product after round: " << product_round << std::endl;
-     // Clamp and apply zero-point
+
+     // Clip and apply zero-point
      y_data[i] = static_cast<int8_t>(std::min(std::max(product_round + zp, static_cast<int32_t>(std::numeric_limits<int8_t>::min())), static_cast<int32_t>(std::numeric_limits<int8_t>::max())));
    }
    return Status::OK();
