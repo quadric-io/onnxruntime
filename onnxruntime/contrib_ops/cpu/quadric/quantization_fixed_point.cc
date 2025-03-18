@@ -31,20 +31,21 @@ ONNX_OPERATOR_KERNEL_EX(
     DequantizeLinearFixedPoint);
 
 // Helper: Compute min/max range from scale & zero-point
-std::pair<float, float> GetDequantizedRange(float scale, int8_t zero_point) {
-    int8_t int8_min = std::numeric_limits<int8_t>::min();
-    int8_t int8_max = std::numeric_limits<int8_t>::max();
-    return { (int8_min - zero_point) * scale, (int8_max - zero_point) * scale };
+std::pair<float, float> getDequantizedRange(float scale, int8_t zeroPoint) {
+    constexpr int8_t int8Min = std::numeric_limits<int8_t>::min();
+    constexpr int8_t int8Max = std::numeric_limits<int8_t>::max();
+    return { (int8Min - zeroPoint) * scale, (int8Max - zeroPoint) * scale };
 }
 
 // Compute required fractional bits given a range
-int ComputeFracBits(float min_val, float max_val) {
-  constexpr int kMaxFracBits = 31;
-  float largest = std::max(std::fabs(min_val), std::fabs(max_val));
-  return (largest < 1.0f) ? kMaxFracBits : (kMaxFracBits - static_cast<int>(std::ceil(std::log2(largest + 1))));
+int computeFracBits(float minVal, float maxVal) {
+  constexpr int maxFracBits = 31;
+  float largest = std::max(std::fabs(minVal), std::fabs(maxVal));
+  return (largest < 1.0f) ? maxFracBits : (maxFracBits - static_cast<int>(std::ceil(std::log2(largest + 1))));
 }
 
-int FixedPointMultiply(int32_t a, int32_t b, int shift) {
+// Helper: Fixed-point multiplication with shifting
+int fixedPointMultiply(int32_t a, int32_t b, int shift) {
   int64_t product = static_cast<int64_t>(a) * b;
   return (shift > 0) ? (product >> shift) : (product << -shift);
 }
@@ -53,37 +54,37 @@ Status DequantizeLinearFixedPoint::Compute(OpKernelContext* ctx) const {
   // Retrieve input tensors
   const auto* X = ctx->Input<Tensor>(0);
   const auto* scale = ctx->Input<Tensor>(1);
-  const auto* zero_point = ctx->Input<Tensor>(2);
+  const auto* zeroPoint = ctx->Input<Tensor>(2);
 
   // Validate inputs
   ORT_ENFORCE(X, "Input tensor 'X' is null.");
   ORT_ENFORCE(scale, "Scale tensor is null.");
-  ORT_ENFORCE(zero_point, "Zero-point tensor is null.");
+  ORT_ENFORCE(zeroPoint, "Zero-point tensor is null.");
 
   // Extract values
-  const int8_t* x_data = X->Data<int8_t>();
+  const int8_t* xData = X->Data<int8_t>();
   float s = *(scale->Data<float>());
-  int8_t zp = *(zero_point->Data<int8_t>());
+  int8_t zp = *(zeroPoint->Data<int8_t>());
 
   // Compute range and fractional bits
-  auto [min_val, max_val] = GetDequantizedRange(s, zp);
-  int result_frac_bits = ComputeFracBits(min_val, max_val);
+  auto [minVal, maxVal] = getDequantizedRange(s, zp);
+  int resultFracBits = computeFracBits(minVal, maxVal);
 
   // Convert scale to fixed-point
-  std::vector<double> ScaleValueVec = {s};
-  auto p = dataToQfp(ScaleValueVec, -1, 32, false);  // Avoid creating a vector
-  int scale_frac_bits = p.second;
-  int32_t scale_qfp = static_cast<int32_t>(p.first[0]);
+  std::vector<double> scaleValueVec = {s};
+  auto p = dataToQfp(scaleValueVec, -1, 32, false);
+  int scaleFracBits = p.second;
+  int32_t scaleQfp = static_cast<int32_t>(p.first[0]);
 
-  int shift = scale_frac_bits - result_frac_bits;
+  int shift = scaleFracBits - resultFracBits;
 
   // Allocate output tensor
   auto* Y = ctx->Output(0, X->Shape());
-  int32_t* y_data = Y->MutableData<int32_t>();
-  size_t tensor_size = X->Shape().Size();
+  int32_t* yData = Y->MutableData<int32_t>();
+  size_t tensorSize = X->Shape().Size();
 
-  for (size_t i = 0; i < tensor_size; ++i) {
-    y_data[i] = FixedPointMultiply(x_data[i] - zp, scale_qfp, shift);
+  for (size_t i = 0; i < tensorSize; ++i) {
+    yData[i] = fixedPointMultiply(xData[i] - zp, scaleQfp, shift);
   }
 
   return Status::OK();
@@ -96,15 +97,15 @@ class QuantizeLinearFixedPoint final : public OpKernel {
    Status Compute(OpKernelContext* ctx) const override;
  };
 
- // Register Kernel
- ONNX_OPERATOR_KERNEL_EX(
+// Register Kernel
+ONNX_OPERATOR_KERNEL_EX(
      QuantizeLinearFixedPoint,
      kQuadricDomain,
      1,
      kCpuExecutionProvider,
      KernelDefBuilder()
          .TypeConstraint("T", DataTypeImpl::GetTensorType<int32_t>())  // Input tensor
-         .TypeConstraint("T1", DataTypeImpl::GetTensorType<int8_t>())  // x_frac_bits
+         .TypeConstraint("T1", DataTypeImpl::GetTensorType<int8_t>())  // xFracBits
          .TypeConstraint("T2", DataTypeImpl::GetTensorType<float>())   // Scale
          .TypeConstraint("T3", DataTypeImpl::GetTensorType<int8_t>())  // Zero-point
          .TypeConstraint("T4", DataTypeImpl::GetTensorType<int8_t>()), // Output
@@ -112,53 +113,53 @@ class QuantizeLinearFixedPoint final : public OpKernel {
 
  // Compute function
  Status QuantizeLinearFixedPoint::Compute(OpKernelContext* ctx) const {
-   // Get input tensors
-   const auto* X = ctx->Input<Tensor>(0);
-   const auto* x_frac_bits = ctx->Input<Tensor>(1);
-   const auto* scale = ctx->Input<Tensor>(2);
-   const auto* zero_point = ctx->Input<Tensor>(3);
+  // Get input tensors
+  const auto* X = ctx->Input<Tensor>(0);
+  const auto* xFracBitsTensor = ctx->Input<Tensor>(1);
+  const auto* scale = ctx->Input<Tensor>(2);
+  const auto* zeroPoint = ctx->Input<Tensor>(3);
 
-   // Validate inputs
-   ORT_ENFORCE(X != nullptr, "Input X is null");
-   ORT_ENFORCE(x_frac_bits != nullptr, "x_frac_bits is null");
-   ORT_ENFORCE(scale != nullptr, "Scale is null");
-   ORT_ENFORCE(zero_point != nullptr, "Zero point is null");
+  // Validate inputs
+  ORT_ENFORCE(X != nullptr, "Input X is null");
+  ORT_ENFORCE(xFracBitsTensor != nullptr, "xFracBits is null");
+  ORT_ENFORCE(scale != nullptr, "Scale is null");
+  ORT_ENFORCE(zeroPoint != nullptr, "Zero point is null");
 
-   // Retrieve input data
-   const int32_t* x_data = X->Data<int32_t>();
-   int8_t x_frac_bits_val = *(x_frac_bits->Data<int8_t>());
-   double s = *(scale->Data<float>());
-   int8_t zp = *(zero_point->Data<int8_t>());
+  // Retrieve input data
+  const int32_t* x_data = X->Data<int32_t>();
+  int8_t xFracBits = *(xFracBitsTensor->Data<int8_t>());
+  double s = *(scale->Data<float>());
+  int8_t zp = *(zeroPoint->Data<int8_t>());
 
-   double scale_inv = 1.0 / s;
-    std::vector<double> ScaleValueVec = {scale_inv};
-    auto p = dataToQfp(ScaleValueVec, -1, 32, false); // Returns std::make_pair(qfp, fracBits)
-    int64_t scale_inv_qfp = p.first[0];
-    int scale_inv_frac_bits = p.second;
+  double scaleInv = 1.0 / s;
+   std::vector<double> ScaleValueVec = {scaleInv};
+   auto p = dataToQfp(ScaleValueVec, -1, 32, false); // Returns std::make_pair(qfp, fracBits)
+   int64_t scaleInvQfp = p.first[0];
+   int scaleInvFracvBits = p.second;
 
-   int post_mac_int_bits = 29;
-   int post_mac_frac_bits = 31 - post_mac_int_bits;
+  int postMacIntBits = 29;
+  int postMacFracBits = 31 - postMacIntBits;
 
-   int result_frac_bits = post_mac_frac_bits;
-   int shift = scale_inv_frac_bits + x_frac_bits_val - result_frac_bits;
-   if (shift > 31){
-        shift = 31;
-        result_frac_bits = scale_inv_frac_bits + x_frac_bits_val - 31;
-   }
+  int resultFracBits = postMacFracBits;
+  int shift = scaleInvFracvBits + xFracBits - resultFracBits;
+  if (shift > 31){
+       shift = 31;
+       resultFracBits = scaleInvFracvBits + xFracBits - 31;
+  }
 
-   auto* Y = ctx->Output(0, X->Shape());
-   int8_t* y_data = Y->MutableData<int8_t>();
-   size_t tensor_size = X->Shape().Size();
-   for (size_t i = 0; i < tensor_size; ++i) {
-    int32_t product = FixedPointMultiply(x_data[i], scale_inv_qfp, shift);
-     // Rounding
-     int32_t product_round = fxRoundPosInf(static_cast<int32_t>(product), static_cast<uint8_t>(result_frac_bits));
+  auto* Y = ctx->Output(0, X->Shape());
+  int8_t* yData = Y->MutableData<int8_t>();
+  size_t tensor_size = X->Shape().Size();
+  for (size_t i = 0; i < tensor_size; ++i) {
+   int32_t product = fixedPointMultiply(x_data[i], scaleInvQfp, shift);
+    // Rounding
+    int32_t productRound = fxRoundPosInf(static_cast<int32_t>(product), static_cast<uint8_t>(resultFracBits));
 
-     // Clip and apply zero-point
-     y_data[i] = static_cast<int8_t>(std::min(std::max(product_round + zp, static_cast<int32_t>(std::numeric_limits<int8_t>::min())), static_cast<int32_t>(std::numeric_limits<int8_t>::max())));
-   }
-   return Status::OK();
- }
+    // Clip and apply zero-point
+    yData[i] = static_cast<int8_t>(std::min(std::max(productRound + zp, static_cast<int32_t>(std::numeric_limits<int8_t>::min())), static_cast<int32_t>(std::numeric_limits<int8_t>::max())));
+  }
+  return Status::OK();
+}
 
 }  // namespace contrib
 }  // namespace onnxruntime
