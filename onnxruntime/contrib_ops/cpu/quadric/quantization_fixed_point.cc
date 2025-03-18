@@ -30,7 +30,7 @@ ONNX_OPERATOR_KERNEL_EX(
         .TypeConstraint("T3", DataTypeImpl::GetTensorType<int32_t>()), // Output
     DequantizeLinearFixedPoint);
 
-// Helper: Compute min/max range from scale & zero-point
+// Compute min/max range from scale & zero-point
 std::pair<float, float> getDequantizedRange(float scale, int8_t zeroPoint) {
     constexpr int8_t int8Min = std::numeric_limits<int8_t>::min();
     constexpr int8_t int8Max = std::numeric_limits<int8_t>::max();
@@ -44,9 +44,9 @@ int computeFracBits(float minVal, float maxVal) {
   return (largest < 1.0f) ? maxFracBits : (maxFracBits - static_cast<int>(std::ceil(std::log2(largest + 1))));
 }
 
-// Helper: Fixed-point multiplication with shifting
-int fixedPointMultiply(int32_t a, int32_t b, int shift) {
-  int64_t product = static_cast<int64_t>(a) * b;
+// Fixed-point multiplication with provided shift
+int32_t fixedPointMultiply(int32_t a, int32_t b, int shift) {
+  int64_t product = static_cast<int64_t>(a) * static_cast<int64_t>(b);
   return (shift > 0) ? (product >> shift) : (product << -shift);
 }
 
@@ -111,7 +111,6 @@ ONNX_OPERATOR_KERNEL_EX(
          .TypeConstraint("T4", DataTypeImpl::GetTensorType<int8_t>()), // Output
      QuantizeLinearFixedPoint);
 
- // Compute function
  Status QuantizeLinearFixedPoint::Compute(OpKernelContext* ctx) const {
   // Get input tensors
   const auto* X = ctx->Input<Tensor>(0);
@@ -135,24 +134,23 @@ ONNX_OPERATOR_KERNEL_EX(
    std::vector<double> ScaleValueVec = {scaleInv};
    auto p = dataToQfp(ScaleValueVec, -1, 32, false); // Returns std::make_pair(qfp, fracBits)
    int64_t scaleInvQfp = p.first[0];
-   int scaleInvFracvBits = p.second;
+   int scaleInvFracBits = p.second;
 
-  int postMacIntBits = 29;
-  int postMacFracBits = 31 - postMacIntBits;
+   constexpr int postMacIntBits = 29;
+   constexpr int postMacFracBits = 31 - postMacIntBits;
 
   int resultFracBits = postMacFracBits;
-  int shift = scaleInvFracvBits + xFracBits - resultFracBits;
+  int shift = scaleInvFracBits + xFracBits - resultFracBits;
   if (shift > 31){
        shift = 31;
-       resultFracBits = scaleInvFracvBits + xFracBits - 31;
+       resultFracBits = scaleInvFracBits + xFracBits - 31;
   }
 
   auto* Y = ctx->Output(0, X->Shape());
   int8_t* yData = Y->MutableData<int8_t>();
   size_t tensor_size = X->Shape().Size();
   for (size_t i = 0; i < tensor_size; ++i) {
-   int32_t product = fixedPointMultiply(x_data[i], scaleInvQfp, shift);
-    // Rounding
+    int32_t product = fixedPointMultiply(x_data[i], scaleInvQfp, shift);
     int32_t productRound = fxRoundPosInf(static_cast<int32_t>(product), static_cast<uint8_t>(resultFracBits));
 
     // Clip and apply zero-point
