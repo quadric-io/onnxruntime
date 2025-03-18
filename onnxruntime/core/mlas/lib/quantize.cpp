@@ -119,17 +119,10 @@ int deriveFractionalBits(float scalar, int qfpSize) {
 
 // Function to convert scalar to qfp
 int scalarToQfp(float value, int fracBits) {
-    float frac, integer;
-    frac = ::modff(value, &integer);
-
-    integer = static_cast<int>(std::abs(integer)) << fracBits;
-    frac = std::roundf(std::abs(frac) * (1 << fracBits));
-
-    int qfp = static_cast<int>(integer + frac);
-    if (value < 0) {
-        qfp *= -1;
-    }
-
+    double mult = static_cast<double>(1ULL << fracBits);
+    std::cout << "Mult: " << mult << std::endl;
+    int qfp = static_cast<int>(static_cast<double>(value) * mult);
+    std::cout << "QFP: " << qfp << std::endl;
     return qfp;
 }
 
@@ -2146,7 +2139,7 @@ MlasRequantizeOutputFixedPoint(
     size_t CountM,
     size_t CountN
     )
-{
+    {
     // New MlasRequantizeOuput but for fixed point not floating point
     // Floating point conversion to fixed point is multiply by 2**n where n is the number of fractional bits
     // Then, interpret this number as a 32 bit int
