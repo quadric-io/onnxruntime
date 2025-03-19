@@ -21,6 +21,7 @@ Abstract:
 #include <cstdlib>
 #include <cstdint>
 #include <stdexcept>
+#include <vector>
 
 //
 // Define the calling convention for Windows targets.
