@@ -13,7 +13,8 @@ class TestQuantizeLinearFixedPoint(unittest.TestCase):
         self.model_path = "quantize_linear_fixed_point_test.onnx"
         self.input_output_shape = [1, 1, 2, 3]
         self.input_data_frac_bits = 27
-        self.input_data = np.array([-128.345, 1.4, 2, 3.4, 127.6, 127.6], dtype=np.float32).reshape(self.input_output_shape)
+        self.input_data = np.array([-15, 1.4, 2, 3.4,
+      14.5, 15.5], dtype=np.float32).reshape(self.input_output_shape)
         self.expected_output = np.array([[-128, 61, 93, 127, 127, 127]], dtype=np.int8).reshape(self.input_output_shape)
         self.create_model(self.model_path)
 
