@@ -19,7 +19,6 @@ Abstract:
 --*/
 
 #include "qladd.h"
-// #include "qfunctions_helper.h"
 
 #include "mlasi.h"
 #include <iostream>
@@ -34,7 +33,6 @@ Abstract:
 #include <iterator>
 #include <type_traits>
 
-#include "qfunctions_helper.h"
 
 
 // Pure C++ helper, back off here in rare case.
@@ -132,7 +130,7 @@ MlasQLinearAddKernelRawHelperFixedPoint(
         int64_t ValueC = ValueA + ValueB;
 
         // ValueC = ValueC >> mulScaleC;
-        ValueC = customRound<16>(static_cast<int32_t>(ValueC));
+        ValueC = fxRoundPosInf(static_cast<int32_t>(ValueC), 16);
         int32_t ValueCInt = ValueC + ZeroPointC;
         ValueCInt = std::min(std::max(ValueCInt, MinimumValue), MaximumValue);
         OutputC[n] = (DataType)(ValueCInt);
