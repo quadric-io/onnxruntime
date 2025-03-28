@@ -28,8 +28,6 @@ class TestQLinearConv(unittest.TestCase):
         # Create a specific ONNX model with a single QLinearConv node
         self.model_path = "qlinearadd_model.onnx"
         self.create_qlinearadd_model(self.model_path)
-        self.cpu_jsons = []
-        self.gpnpu_jsons = []
 
     def create_qlinearadd_model(self, output_model_path):
         a_scale, a_zero_point = 0.2039528638124466, -14
@@ -94,68 +92,53 @@ class TestQLinearConv(unittest.TestCase):
         onnx.save(model, output_model_path)
 
     def tearDown(self):
-        # Delete the ONNX file and JSON files after testing
+        # Delete the ONNX file after testing
         if os.path.exists(self.model_path):
             os.remove(self.model_path)
-        for json_file in glob.glob("*.json"):
-            os.remove(json_file)
 
-    def performance_and_accuracy_test(self, num_iterations=10):
-        for _ in range(num_iterations):
-            # CPU Session
-            session_options_cpu = ort.SessionOptions()
-            session_options_cpu.enable_gpnpu = False
-            session_options_cpu.enable_profiling = True
-            session_options_cpu.profile_file_prefix = "cpu"
-            session_cpu = ort.InferenceSession(
-                self.model_path,
-                sess_options=session_options_cpu,
-                providers=["CPUExecutionProvider"]
-            )
+    def test_accuracy(self):
+        # CPU Session
+        session_options_cpu = ort.SessionOptions()
+        session_options_cpu.enable_gpnpu = False
+        session_cpu = ort.InferenceSession(
+            self.model_path,
+            sess_options=session_options_cpu,
+            providers=["CPUExecutionProvider"]
+        )
 
-            # GPNPU Session
-            session_options_gpnpu = ort.SessionOptions()
-            session_options_gpnpu.enable_gpnpu = True
-            session_options_gpnpu.enable_profiling = True
-            session_options_gpnpu.profile_file_prefix = "gpnpu"
-            session_gpnpu = ort.InferenceSession(
-                self.model_path,
-                sess_options=session_options_gpnpu,
-                providers=["CPUExecutionProvider"]
-            )
+        # GPNPU Session
+        session_options_gpnpu = ort.SessionOptions()
+        session_options_gpnpu.enable_gpnpu = True
+        session_gpnpu = ort.InferenceSession(
+            self.model_path,
+            sess_options=session_options_gpnpu,
+            providers=["CPUExecutionProvider"]
+        )
 
-            # Prepare input
-            input_a_info = session_cpu.get_inputs()[0]
-            shape_tuple_a = tuple(dim if isinstance(dim, int) else 1 for dim in input_a_info.shape)
-            x_data_a = np.random.randint(
-                low=-128, high=128, size=shape_tuple_a, dtype=np.int8
-            )
-            input_dict = {input_a_info.name: x_data_a}
+        # Prepare input
+        input_a_info = session_cpu.get_inputs()[0]
+        shape_tuple_a = tuple(dim if isinstance(dim, int) else 1 for dim in input_a_info.shape)
+        x_data_a = np.random.randint(
+            low=-128, high=128, size=shape_tuple_a, dtype=np.int8
+        )
+        input_dict = {input_a_info.name: x_data_a}
 
-            # Time and run CPU inference
-            output_cpu = session_cpu.run(
-                [session_cpu.get_outputs()[0].name],
-                input_dict
-            )[0]
-            json_name_cpu = session_cpu.end_profiling()
-            self.cpu_jsons.append(json_name_cpu)
+        # Time and run CPU inference
+        output_cpu = session_cpu.run(
+            [session_cpu.get_outputs()[0].name],
+            input_dict
+        )[0]
 
-            # Time and run GPNPU inference
-            output_gpnpu = session_gpnpu.run(
-                [session_gpnpu.get_outputs()[0].name],
-                input_dict
-            )[0]
-            json_name_gpnpu = session_gpnpu.end_profiling()
-            self.gpnpu_jsons.append(json_name_gpnpu)
+        # Time and run GPNPU inference
+        output_gpnpu = session_gpnpu.run(
+            [session_gpnpu.get_outputs()[0].name],
+            input_dict
+        )[0]
 
-            # Calculate max difference
-            max_diff = np.max(np.abs(output_cpu - output_gpnpu))
+        # Calculate max difference
+        max_diff = np.max(np.abs(output_cpu - output_gpnpu))
 
-            self.assertLessEqual(max_diff, 1)
-
-    def test_performance_and_accuracy(self):
-        # Run test
-        self.performance_and_accuracy_test(num_iterations=10)
+        self.assertLessEqual(max_diff, 1)
 
 if __name__ == '__main__':
     unittest.main()
