@@ -91,18 +91,18 @@ MlasQLinearAddKernelRawHelperFixedPoint(
     size_t N
     )
 {
-    int dequant_frac_bits = 16; // hard coded in tvm python
+    int dequantFracBits = 16; // hard coded in tvm python
 
     std::vector<double> ScaleValueVecA = {ScaleA/ScaleC};  // Create single-element vector
     auto pairA = dataToQfp(ScaleValueVecA, -1, 32, false); // Returns std::make_pair(qfp, fracBits)
     int fracBitsA = pairA.second;
-    int mulScaleA = fracBitsA - dequant_frac_bits;
+    int mulScaleA = fracBitsA - dequantFracBits;
     int64_t* fpScaleA = new int64_t;
 
     std::vector<double> ScaleValueVecB = {ScaleB/ScaleC};  // Create single-element vector
     auto pairB = dataToQfp(ScaleValueVecB, -1, 32, false); // Returns std::make_pair(qfp, fracBits)
     int fracBitsB = pairB.second;
-    int mulScaleB = fracBitsB - dequant_frac_bits;
+    int mulScaleB = fracBitsB - dequantFracBits;
     int64_t* fpScaleB = new int64_t;
 
     int fracBits = (fracBitsA > fracBitsB) ? fracBitsA : fracBitsB;
@@ -130,7 +130,7 @@ MlasQLinearAddKernelRawHelperFixedPoint(
         int64_t ValueC = ValueA + ValueB;
 
         // ValueC = ValueC >> mulScaleC;
-        ValueC = fxRoundPosInf(static_cast<int32_t>(ValueC), 16);
+        ValueC = fxRoundPosInf(static_cast<int32_t>(ValueC), dequantFracBits);
         int32_t ValueCInt = ValueC + ZeroPointC;
         ValueCInt = std::min(std::max(ValueCInt, MinimumValue), MaximumValue);
         OutputC[n] = (DataType)(ValueCInt);
