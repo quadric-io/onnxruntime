@@ -18,8 +18,8 @@ Abstract:
 #pragma once
 
 #include <cstddef>
-#include <cstdlib>
 #include <cstdint>
+#include <cstdlib>
 #include <stdexcept>
 #include <vector>
 
@@ -1269,29 +1269,32 @@ MlasRequantizeOutput(
     size_t CountN
     );
 
-template<typename OutputType>
+template <typename OutputType>
 void
-MLASCALL
-MlasRequantizeOutputFixedPoint(
-    const int32_t* Input,
-    size_t InputLeadingDimension,
-    OutputType* Output,
-    size_t OutputLeadingDimension,
-    const int32_t* Bias,
-    const float* Scale,
-    bool PerColumnScale,
-    OutputType ZeroPoint,
-    size_t StartM,
-    size_t StartN,
-    size_t CountM,
-    size_t CountN
+    MLASCALL
+    MlasRequantizeOutputFixedPoint(
+        const int32_t* Input,
+        size_t InputLeadingDimension,
+        OutputType* Output,
+        size_t OutputLeadingDimension,
+        const int32_t* Bias,
+        const float* Scale,
+        bool PerColumnScale,
+        OutputType ZeroPoint,
+        size_t StartM,
+        size_t StartN,
+        size_t CountM,
+        size_t CountN
     );
 
-int32_t fxRoundPosInf(const int32_t a, uint8_t aFracBits);
+int32_t
+fxRoundPosInf(const int32_t a, uint8_t aFracBits);
 
 template <typename T>
-std::pair<std::vector<int>, int> dataToQfp(
-    const std::vector<T>& data, int fracBits = -1, int qfpSize = 32, bool scalarAsFloat = true);
+std::pair<std::vector<int>, int>
+dataToQfp(
+    const std::vector<T>& data, int fracBits = -1, int qfpSize = 32, bool scalarAsFloat = true
+);
 
 class MLAS_QGEMM_REQUANT_OUTPUT_PROCESSOR : public MLAS_QGEMM_OUTPUT_PROCESSOR
 {
@@ -1342,7 +1345,6 @@ class MLAS_QGEMM_REQUANT_OUTPUT_PROCESSOR : public MLAS_QGEMM_OUTPUT_PROCESSOR
     int32_t ZeroPoint_;
     bool OutputIsSigned_;
 };
-
 
 void
 MLASCALL

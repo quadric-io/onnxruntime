@@ -1,7 +1,7 @@
 #include "core/framework/op_kernel.h"
 #include "core/common/common.h"
-#include <cmath>  // For log2()
-#include <limits> // For int8_t min/max
+#include <cmath>   // For log2()
+#include <limits>  // For int8_t min/max
 #include <iostream>
 #include <iomanip>  // For std::setprecision
 #include "core/mlas/inc/mlas.h"
@@ -24,17 +24,17 @@ ONNX_OPERATOR_KERNEL_EX(
     1,
     kCpuExecutionProvider,
     KernelDefBuilder()
-        .TypeConstraint("T", DataTypeImpl::GetTensorType<int8_t>())  // Input tensor
-        .TypeConstraint("T1", DataTypeImpl::GetTensorType<float>())  // Scale
-        .TypeConstraint("T2", DataTypeImpl::GetTensorType<int8_t>()) // Zero-point
-        .TypeConstraint("T3", DataTypeImpl::GetTensorType<int32_t>()), // Output
+        .TypeConstraint("T", DataTypeImpl::GetTensorType<int8_t>())     // Input tensor
+        .TypeConstraint("T1", DataTypeImpl::GetTensorType<float>())     // Scale
+        .TypeConstraint("T2", DataTypeImpl::GetTensorType<int8_t>())    // Zero-point
+        .TypeConstraint("T3", DataTypeImpl::GetTensorType<int32_t>()),  // Output
     DequantizeLinearFixedPoint);
 
 // Compute min/max range from scale & zero-point
 std::pair<float, float> getDequantizedRange(float scale, int8_t zeroPoint) {
-    constexpr int8_t int8Min = std::numeric_limits<int8_t>::min();
-    constexpr int8_t int8Max = std::numeric_limits<int8_t>::max();
-    return { (int8Min - zeroPoint) * scale, (int8Max - zeroPoint) * scale };
+  constexpr int8_t int8Min = std::numeric_limits<int8_t>::min();
+  constexpr int8_t int8Max = std::numeric_limits<int8_t>::max();
+  return {(int8Min - zeroPoint) * scale, (int8Max - zeroPoint) * scale};
 }
 
 // Compute required fractional bits given a range
@@ -92,26 +92,26 @@ Status DequantizeLinearFixedPoint::Compute(OpKernelContext* ctx) const {
 
 // --- QuantizeLinearFixedPoint
 class QuantizeLinearFixedPoint final : public OpKernel {
-  public:
-   explicit QuantizeLinearFixedPoint(const OpKernelInfo& info) : OpKernel(info) {}
-   Status Compute(OpKernelContext* ctx) const override;
- };
+ public:
+  explicit QuantizeLinearFixedPoint(const OpKernelInfo& info) : OpKernel(info) {}
+  Status Compute(OpKernelContext* ctx) const override;
+};
 
 // Register Kernel
 ONNX_OPERATOR_KERNEL_EX(
-     QuantizeLinearFixedPoint,
-     kQuadricDomain,
-     1,
-     kCpuExecutionProvider,
-     KernelDefBuilder()
-         .TypeConstraint("T", DataTypeImpl::GetTensorType<int32_t>())  // Input tensor
-         .TypeConstraint("T1", DataTypeImpl::GetTensorType<int8_t>())  // xFracBits
-         .TypeConstraint("T2", DataTypeImpl::GetTensorType<float>())   // Scale
-         .TypeConstraint("T3", DataTypeImpl::GetTensorType<int8_t>())  // Zero-point
-         .TypeConstraint("T4", DataTypeImpl::GetTensorType<int8_t>()), // Output
-     QuantizeLinearFixedPoint);
+    QuantizeLinearFixedPoint,
+    kQuadricDomain,
+    1,
+    kCpuExecutionProvider,
+    KernelDefBuilder()
+        .TypeConstraint("T", DataTypeImpl::GetTensorType<int32_t>())   // Input tensor
+        .TypeConstraint("T1", DataTypeImpl::GetTensorType<int8_t>())   // xFracBits
+        .TypeConstraint("T2", DataTypeImpl::GetTensorType<float>())    // Scale
+        .TypeConstraint("T3", DataTypeImpl::GetTensorType<int8_t>())   // Zero-point
+        .TypeConstraint("T4", DataTypeImpl::GetTensorType<int8_t>()),  // Output
+    QuantizeLinearFixedPoint);
 
- Status QuantizeLinearFixedPoint::Compute(OpKernelContext* ctx) const {
+Status QuantizeLinearFixedPoint::Compute(OpKernelContext* ctx) const {
   // Get input tensors
   const auto* X = ctx->Input<Tensor>(0);
   const auto* xFracBitsTensor = ctx->Input<Tensor>(1);
@@ -131,19 +131,19 @@ ONNX_OPERATOR_KERNEL_EX(
   int8_t zp = *(zeroPoint->Data<int8_t>());
 
   double scaleInv = 1.0 / s;
-   std::vector<double> ScaleValueVec = {scaleInv};
-   auto p = dataToQfp(ScaleValueVec, -1, 32, false); // Returns std::make_pair(qfp, fracBits)
-   int64_t scaleInvQfp = p.first[0];
-   int scaleInvFracBits = p.second;
+  std::vector<double> ScaleValueVec = {scaleInv};
+  auto p = dataToQfp(ScaleValueVec, -1, 32, false);  // Returns std::make_pair(qfp, fracBits)
+  int64_t scaleInvQfp = p.first[0];
+  int scaleInvFracBits = p.second;
 
-   constexpr int postMacIntBits = 29;
-   constexpr int postMacFracBits = 31 - postMacIntBits;
+  constexpr int postMacIntBits = 29;
+  constexpr int postMacFracBits = 31 - postMacIntBits;
 
   int resultFracBits = postMacFracBits;
   int shift = scaleInvFracBits + xFracBits - resultFracBits;
-  if (shift > 31){
-       shift = 31;
-       resultFracBits = scaleInvFracBits + xFracBits - 31;
+  if (shift > 31) {
+    shift = 31;
+    resultFracBits = scaleInvFracBits + xFracBits - 31;
   }
 
   auto* Y = ctx->Output(0, X->Shape());
