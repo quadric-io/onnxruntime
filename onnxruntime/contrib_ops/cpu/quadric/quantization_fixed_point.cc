@@ -40,8 +40,13 @@ std::pair<float, float> getDequantizedRange(float scale, int8_t zeroPoint) {
 // Compute required fractional bits given a range
 int computeFracBits(float minVal, float maxVal) {
   constexpr int maxFracBits = 31;
-  float largest = std::max(std::fabs(minVal), std::fabs(maxVal));
-  return (largest < 1.0f) ? maxFracBits : (maxFracBits - static_cast<int>(std::ceil(std::log2(largest + 1))));
+  float absMinVal = std::fabs(minVal);
+  float absMaxVal = std::fabs(maxVal);
+  if (absMinVal > absMaxVal) {
+    return (absMinVal < 1.0f) ? maxFracBits : (maxFracBits - static_cast<int>(std::ceil(std::log2(absMinVal))));
+  } else {
+    return (absMaxVal < 1.0f) ? maxFracBits : (maxFracBits - static_cast<int>(std::ceil(std::log2(absMaxVal + 1))));
+  }
 }
 
 // Fixed-point multiplication with provided shift
