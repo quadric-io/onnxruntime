@@ -93,8 +93,9 @@ MlasQuantizeLinearVector(
 }
 
 // Copying logic from fxRoundPosInf in cgc_ccl.hpp for custom round
-template <uint8_t aFracBits>
-inline int32_t fxRoundPosInf(const int32_t a) {
+int32_t
+fxRoundPosInf(const int32_t a, uint8_t aFracBits)
+{
     const int32_t zp5 = 1 << (aFracBits - 1);
     return (a + zp5) >> aFracBits;
 }
@@ -119,18 +120,11 @@ int deriveFractionalBits(float scalar, int qfpSize) {
 }
 
 // Function to convert scalar to qfp
-int scalarToQfp(float value, int fracBits) {
-    float frac, integer;
-    frac = ::modff(value, &integer);
-
-    integer = static_cast<int>(std::abs(integer)) << fracBits;
-    frac = std::roundf(std::abs(frac) * (1 << fracBits));
-
-    int qfp = static_cast<int>(integer + frac);
-    if (value < 0) {
-        qfp *= -1;
-    }
-
+int
+scalarToQfp(float value, int fracBits)
+{
+    double mult = static_cast<double>(1ULL << fracBits);
+    int qfp = static_cast<int>(static_cast<double>(value) * mult);
     return qfp;
 }
 
@@ -139,9 +133,11 @@ int scalarToQfp(float value, int fracBits) {
 // Here the function accepts a vector (because if it were a pointer we would have to pass in size also)
 // When using this we can just turn whatever into std::vector<T> before passing in
 template <typename T>
-std::pair<std::vector<int>, int> dataToQfp(
-    const std::vector<T>& data, int fracBits = -1, int qfpSize = 32, bool scalarAsFloat = true
-) {
+std::pair<std::vector<int>, int>
+dataToQfp(
+    const std::vector<T>& data, int fracBits, int qfpSize, bool scalarAsFloat
+)
+{
     std::vector<int> qfp;
     if (data.size() != 1) {
         if (fracBits == -1) {
@@ -150,7 +146,7 @@ std::pair<std::vector<int>, int> dataToQfp(
         qfp.reserve(data.size());
         std::transform(data.begin(), data.end(), std::back_inserter(qfp),
         [fracBits](T value) { return scalarToQfp(value, fracBits); });
-    } else { // data is not really a vector, but we considered everything a vector in our declaration
+    } else {  // data is not really a vector, but we considered everything a vector in our declaration
         if (fracBits == -1) {
             fracBits = deriveFractionalBits(data[0], qfpSize);
         }
@@ -163,7 +159,6 @@ std::pair<std::vector<int>, int> dataToQfp(
 
     return std::make_pair(qfp, fracBits);
 }
-
 
 template<typename OutputType>
 MLAS_INT32X4
@@ -2132,20 +2127,20 @@ MlasRequantizeOutput(
 
 template <typename OutputType>
 void
-MLASCALL
-MlasRequantizeOutputFixedPoint(
-    const int32_t* Input,
-    size_t InputLeadingDimension,
-    OutputType* Output,
-    size_t OutputLeadingDimension,
-    const int32_t* Bias,
-    const float* Scale,
-    bool PerColumnScale,
-    OutputType ZeroPoint,
-    size_t StartM,
-    size_t StartN,
-    size_t CountM,
-    size_t CountN
+    MLASCALL
+    MlasRequantizeOutputFixedPoint(
+        const int32_t* Input,
+        size_t InputLeadingDimension,
+        OutputType* Output,
+        size_t OutputLeadingDimension,
+        const int32_t* Bias,
+        const float* Scale,
+        bool PerColumnScale,
+        OutputType ZeroPoint,
+        size_t StartM,
+        size_t StartN,
+        size_t CountM,
+        size_t CountN
     )
 {
     // New MlasRequantizeOuput but for fixed point not floating point
@@ -2196,7 +2191,7 @@ MlasRequantizeOutputFixedPoint(
 
             int64_t largeInt = static_cast<int64_t>(IntegerValue) * ScaleValue;
             largeInt = largeInt >> mulScale;
-            IntegerValue = fxRoundPosInf<2>(static_cast<int32_t>(largeInt));
+            IntegerValue = fxRoundPosInf(static_cast<int32_t>(largeInt), 2);
             int32_t Intermediate = IntegerValue + ZeroPoint;
             Intermediate = std::max(Intermediate, MinimumValue);
             Intermediate = std::min(Intermediate, MaximumValue);
@@ -2210,7 +2205,6 @@ MlasRequantizeOutputFixedPoint(
         Input += InputLeadingDimension;
         Output += OutputLeadingDimension;
     }
-
 }
 
 template
@@ -2231,40 +2225,48 @@ MlasRequantizeOutput<int8_t>(
     size_t CountN
     );
 
-template
-void
-MLASCALL
-MlasRequantizeOutput<uint8_t>(
-    const int32_t* Input,
-    size_t InputLeadingDimension,
-    uint8_t* Output,
-    size_t OutputLeadingDimension,
-    const int32_t* Bias,
-    const float* Scale,
-    bool PerColumnScale,
-    uint8_t ZeroPoint,
-    size_t StartM,
-    size_t StartN,
-    size_t CountM,
-    size_t CountN
+template void
+    MLASCALL
+    MlasRequantizeOutput<uint8_t>(
+        const int32_t* Input,
+        size_t InputLeadingDimension,
+        uint8_t* Output,
+        size_t OutputLeadingDimension,
+        const int32_t* Bias,
+        const float* Scale,
+        bool PerColumnScale,
+        uint8_t ZeroPoint,
+        size_t StartM,
+        size_t StartN,
+        size_t CountM,
+        size_t CountN
     );
 
-template
-void
-MLASCALL
-MlasRequantizeOutputFixedPoint<int8_t>(
-    const int32_t* Input,
-    size_t InputLeadingDimension,
-    int8_t* Output,
-    size_t OutputLeadingDimension,
-    const int32_t* Bias,
-    const float* Scale,
-    bool PerColumnScale,
-    int8_t ZeroPoint,
-    size_t StartM,
-    size_t StartN,
-    size_t CountM,
-    size_t CountN
+template std::pair<std::vector<int>, int>
+dataToQfp<float>(
+    const std::vector<float>& data, int fracBits, int qfpSize, bool scalarAsFloat
+);
+
+template std::pair<std::vector<int>, int>
+dataToQfp<double>(
+    const std::vector<double>& data, int fracBits, int qfpSize, bool scalarAsFloat
+);
+
+template void
+    MLASCALL
+    MlasRequantizeOutputFixedPoint<int8_t>(
+        const int32_t* Input,
+        size_t InputLeadingDimension,
+        int8_t* Output,
+        size_t OutputLeadingDimension,
+        const int32_t* Bias,
+        const float* Scale,
+        bool PerColumnScale,
+        int8_t ZeroPoint,
+        size_t StartM,
+        size_t StartN,
+        size_t CountM,
+        size_t CountN
     );
 
 template
