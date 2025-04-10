@@ -16,7 +16,8 @@ import glob
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from helper import get_onnx_const, generate_normal_inputs, json_to_df, load_json
+from helper_onnx import get_onnx_const
+from helper import generate_normal_inputs
 
 m = 1
 k = 2024
@@ -95,8 +96,6 @@ class TestQGemm(unittest.TestCase):
         # Delete the ONNX file and JSON files after testing
         if os.path.exists(self.model_path):
             os.remove(self.model_path)
-        for json_file in glob.glob("*.json"):
-            os.remove(json_file)
 
     def test_accuracy(self, num_iterations=10):
         for _ in range(num_iterations):
@@ -142,7 +141,6 @@ class TestQGemm(unittest.TestCase):
             max_diff = np.max(np.abs(output_cpu - output_gpnpu))
 
             self.assertLessEqual(max_diff, 1)
-
 
 
 if __name__ == "__main__":
