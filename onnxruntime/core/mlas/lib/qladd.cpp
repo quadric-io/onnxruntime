@@ -121,7 +121,6 @@ MlasQLinearAddKernelRawHelperFixedPoint(
         ValueB = ((int64_t(InputB[0]) - ZeroPointB) * (*fpScaleB)) >> mulScale;
     }
 
-    // here
     for (size_t n = 0; n < N; n++) {
         int64_t ValueA = ((*fpScaleA) * (int64_t(InputA[n]) - ZeroPointA)) >> mulScale;
         if (!IsScalarB) {
@@ -129,10 +128,9 @@ MlasQLinearAddKernelRawHelperFixedPoint(
         }
         int64_t ValueC = ValueA + ValueB;
 
-        // ValueC = ValueC >> mulScaleC;
         ValueC = fxRoundPosInf(static_cast<int32_t>(ValueC), dequantFracBits);
         int32_t ValueCInt = ValueC + ZeroPointC;
-        ValueCInt = std::min(std::max(ValueCInt, MinimumValue), MaximumValue);
+        ValueCInt = std::clamp(ValueCInt, MinimumValue, MaximumValue);
         OutputC[n] = (DataType)(ValueCInt);
     }
 }
