@@ -60,24 +60,24 @@ class TestQGemm(unittest.TestCase):
         y = get_onnx_const(output_name, generate_normal_inputs([n, ], np.int32, 0, 32))
 
 
-        # Create QLinearAdd node
-        qlinear_add_node = onnx.helper.make_node(
+        # Create QGEMM node
+        qgemm_node = onnx.helper.make_node(
             "QGemm",
             inputs=[input_a_name, input_a_scale_name, input_a_zp_name,
                 input_b_name, input_b_scale_name, input_b_zp_name,
                 output_name,
                 output_scale_name, output_zp_name],
             outputs=["out"],
-            alpha=0.5,
+            alpha=1.0,
             transA=0,
             transB=1,
             domain="com.microsoft"
         )
 
         # Create graph
-        graph_name = "com.microsoft.QLinearAdd_test"
+        graph_name = "com.microsoft.QGEMM_test"
         graph = helper.make_graph(
-            [qlinear_add_node],
+            [qgemm_node],
             graph_name,
             [input_a_tensor],
             [output_tensor],
