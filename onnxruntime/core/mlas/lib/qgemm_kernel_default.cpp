@@ -214,63 +214,6 @@ MlasGemmQuantKernel<MLAS_GEMM_QUANT_KERNEL_DEFAULT>(
     return 1;
 }
 
-template<>
-size_t
-MlasGemmQuantKernelFixedPoint<MLAS_GEMM_QUANT_KERNEL_DEFAULT>(
-    const MLAS_GEMM_QUANT_KERNEL_DEFAULT::PackedAType* A,
-    const MLAS_GEMM_QUANT_KERNEL_DEFAULT::PackedBType* B,
-    int32_t* C,
-    size_t PackedCountK,
-    size_t CountM,
-    size_t CountN,
-    size_t ldc,
-    const int32_t* RowSumBuffer,
-    const int32_t* ColumnSumBuffer,
-    const int32_t* ZeroPointB,
-    bool ZeroMode
-    )
-{
-    MLAS_UNREFERENCED_PARAMETER(CountM);
-    MLAS_UNREFERENCED_PARAMETER(ldc);
-
-    //
-    // Process a single column of matrix B in a loop.
-    //
-
-    while (CountN-- > 0) {
-
-        int32_t Accumulator = *RowSumBuffer;
-
-        if (ZeroPointB != nullptr) {
-            Accumulator *= *ZeroPointB++;
-        }
-
-        Accumulator += *ColumnSumBuffer++;
-
-        const auto* a = A;
-
-        for (size_t k = 0; k < PackedCountK; k++) {
-
-            Accumulator += a[0] * B[0];
-            Accumulator += a[1] * B[1];
-            Accumulator += a[2] * B[2];
-            Accumulator += a[3] * B[3];
-
-            a += 4;
-            B += 4;
-        }
-
-        if (!ZeroMode) {
-            Accumulator += C[0];
-        }
-
-        C[0] = Accumulator;
-        C += 1;
-    }
-
-    return 1;
-}
-
 const MLAS_GEMM_QUANT_DISPATCH MlasGemmQuantDispatchDefault = {
     MlasGemmQuantOperation<MLAS_GEMM_QUANT_KERNEL_DEFAULT>,
     nullptr,
