@@ -570,55 +570,6 @@ private:
     MLAS_QUANTIZATION_GRANULARITY QuantGran_;
 };
 
-class MLAS_QGEMM_SCALE_BIAS_OUTPUT_PROCESSOR_FIXEDPOINT : public MLAS_QGEMM_OUTPUT_PROCESSOR
-{
-   public:
-    MLAS_QGEMM_SCALE_BIAS_OUTPUT_PROCESSOR_FIXEDPOINT(
-        float* Output,
-        size_t LeadingDimensionOutput,
-        const float* Scale,
-        const float* Bias,
-        MLAS_QGEMM_OUTPUT_MODE Mode = MLAS_QGEMM_OUTPUT_MODE::ZeroMode,
-        MLAS_QUANTIZATION_GRANULARITY QuantGran = MLAS_QUANTIZATION_GRANULARITY::PerMatrix
-    ) : Output_(Output),
-        LeadingDimensionOutput_(LeadingDimensionOutput),
-        Scale_(Scale),
-        Bias_(Bias),
-        OutputMode_(Mode),
-        QuantGran_(QuantGran)
-    {
-    }
-
-    void
-    Process(
-        const int32_t* C,
-        size_t StartM,
-        size_t StartN,
-        size_t CountM,
-        size_t CountN,
-        size_t ldc
-    ) const override;
-
-   private:
-    template <bool HasBias, MLAS_QGEMM_OUTPUT_MODE Mode, MLAS_QUANTIZATION_GRANULARITY QuantGran>
-    inline void
-    ProcessImpl(
-        const int32_t* C,
-        size_t StartM,
-        size_t StartN,
-        size_t CountM,
-        size_t CountN,
-        size_t ldc
-    ) const;
-
-   private:
-    float* Output_;
-    size_t LeadingDimensionOutput_;
-    const float* Scale_;
-    const float* Bias_;
-    MLAS_QGEMM_OUTPUT_MODE OutputMode_;
-    MLAS_QUANTIZATION_GRANULARITY QuantGran_;
-};
 
 /**
  * @brief Supply matrices shape and data type information to quantized gemm functions

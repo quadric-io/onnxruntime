@@ -1,10 +1,10 @@
 import onnxruntime as ort
 import numpy as np
-from tvm.contrib.epu.chimera_job.chimera_job import ChimeraJob
+# from tvm.contrib.epu.chimera_job.chimera_job import ChimeraJob
 
 
-model_path = "/Users/chris/Projects/onnxruntime_quadric/quadric_demo/qgemm_model.onnx"
-
+#model_path = "/Users/chris/Projects/onnxruntime_quadric/quadric_demo/qgemm_model.onnx"
+model_path = "/home/chris/onnxruntime_quadric/quadric_demo/qgemm_model.onnx"
 session_options = ort.SessionOptions()
 session_options.enable_gpnpu = True
 session = ort.InferenceSession(
@@ -21,6 +21,8 @@ input_dict = {'input_a': input_data}
 
 
 # Time and run GPNPU inference
+import os
+print(os.getpid())
 output = session.run(
     ["out"],
     input_dict
@@ -31,12 +33,12 @@ output = session.run(
 
 
 
-cgc_job = ChimeraJob(model_p=model_path, macs_per_pe=8, quiet_iss=False)
-cgc_job.analyze_network()
-cgc_job.compile(quiet=True)
-output_cgc = cgc_job.run_inference_harness(inputs=input_dict)
-output_cgc = output_cgc['out']
+# cgc_job = ChimeraJob(model_p=model_path, macs_per_pe=8, quiet_iss=False)
+# cgc_job.analyze_network()
+# cgc_job.compile(quiet=True)
+# output_cgc = cgc_job.run_inference_harness(inputs=input_dict)
+# output_cgc = output_cgc['out']
 
-print('ouput', output[0, 0:10])
-print('output_cgc', output_cgc[0, 0:10])
-print("diff ", np.max(np.abs(output_cgc - output)))
+# print('ouput', output[0, 0:10])
+# print('output_cgc', output_cgc[0, 0:10])
+# print("diff ", np.max(np.abs(output_cgc - output)))
