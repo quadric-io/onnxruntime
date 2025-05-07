@@ -93,103 +93,64 @@ void QLinearImpl(OpKernelContext& context, double unit_cost, const ProcessBroadc
   BroadcastLooper(broadcast_helper, functors);
 }
 }  // namespace
-
 template <typename T>
 Status QLinearAdd<T>::Compute(OpKernelContext* context) const {
   auto* internal_context = dynamic_cast<OpKernelContextInternal*>(context);
   if (!internal_context) {
-      return Status(common::ONNXRUNTIME, common::FAIL, "Failed to cast OpKernelContext to OpKernelContextInternal");
+    return ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, "Failed to cast OpKernelContext to OpKernelContextInternal");
   }
-  const auto& session_options = internal_context->GetSessionState().GetSessionOptions();
-  // Test to see if we have access to enable_gpnpu flag
-  const bool gpnpu_flag = session_options.enable_gpnpu;
 
-  const ProcessBroadcastSpanFuncs functors = gpnpu_flag ? ProcessBroadcastSpanFuncs{
-        [](BroadcastHelper& per_iter_bh) {
-            QLinearBroadcastHelper& qlbh = static_cast<QLinearBroadcastHelper&>(per_iter_bh);
-            const T input0 = per_iter_bh.ScalarInput0<T>();
-            auto input1 = per_iter_bh.SpanInput1<T>();
-            auto output = per_iter_bh.OutputSpan<T>();
+  const bool use_fixed_point = internal_context->GetSessionState().GetSessionOptions().enable_gpnpu;
 
-            MlasQLinearAddFixedPoint(input1.data(),
-                                     qlbh.B_scale, static_cast<T>(qlbh.B_zero_point),
-                                     &input0,
-                                     qlbh.A_scale, static_cast<T>(qlbh.A_zero_point),
-                                     qlbh.C_scale, static_cast<T>(qlbh.C_zero_point),
-                                     output.data(), output.size(), true);
-        },
-        [](BroadcastHelper& per_iter_bh) {
-            QLinearBroadcastHelper& qlbh = static_cast<QLinearBroadcastHelper&>(per_iter_bh);
-            auto input0 = per_iter_bh.SpanInput0<T>();
-            const T input1 = per_iter_bh.ScalarInput1<T>();
-            auto output = per_iter_bh.OutputSpan<T>();
+  using QLinearAddKernelFn = void(*)(const T*, float, int32_t,
+                                     const T*, float, int32_t,
+                                     float, int32_t,
+                                     T*, size_t, bool);
 
-            MlasQLinearAddFixedPoint(input0.data(),
-                                     qlbh.A_scale, static_cast<T>(qlbh.A_zero_point),
-                                     &input1,
-                                     qlbh.B_scale, static_cast<T>(qlbh.B_zero_point),
-                                     qlbh.C_scale, static_cast<T>(qlbh.C_zero_point),
-                                     output.data(), output.size(), true);
-        },
-        [](BroadcastHelper& per_iter_bh) {
-            QLinearBroadcastHelper& qlbh = static_cast<QLinearBroadcastHelper&>(per_iter_bh);
-            auto input0 = per_iter_bh.SpanInput0<T>();
-            auto input1 = per_iter_bh.SpanInput1<T>();
-            auto output = per_iter_bh.OutputSpan<T>();
+  QLinearAddKernelFn kernel = use_fixed_point ?
+    static_cast<QLinearAddKernelFn>(MlasQLinearAddFixedPoint) :
+    static_cast<QLinearAddKernelFn>(MlasQLinearAdd);
 
-            MlasQLinearAddFixedPoint(input0.data(),
-                                     qlbh.A_scale, static_cast<T>(qlbh.A_zero_point),
-                                     input1.data(),
-                                     qlbh.B_scale, static_cast<T>(qlbh.B_zero_point),
-                                     qlbh.C_scale, static_cast<T>(qlbh.C_zero_point),
-                                     output.data(), output.size(), false);
-        }
-    } : ProcessBroadcastSpanFuncs{
-        [](BroadcastHelper& per_iter_bh) {
-            QLinearBroadcastHelper& qlbh = static_cast<QLinearBroadcastHelper&>(per_iter_bh);
-            const T input0 = per_iter_bh.ScalarInput0<T>();
-            auto input1 = per_iter_bh.SpanInput1<T>();
-            auto output = per_iter_bh.OutputSpan<T>();
+  const ProcessBroadcastSpanFuncs functors{
+    [kernel](BroadcastHelper& bh) {
+      auto& qlbh = static_cast<QLinearBroadcastHelper&>(bh);
+      const T input0 = bh.ScalarInput0<T>();
+      auto input1 = bh.SpanInput1<T>();
+      auto output = bh.OutputSpan<T>();
 
-            MlasQLinearAdd(input1.data(),
-                           qlbh.B_scale, static_cast<T>(qlbh.B_zero_point),
-                           &input0,
-                           qlbh.A_scale, static_cast<T>(qlbh.A_zero_point),
-                           qlbh.C_scale, static_cast<T>(qlbh.C_zero_point),
-                           output.data(), output.size(), true);
-        },
-        [](BroadcastHelper& per_iter_bh) {
-            QLinearBroadcastHelper& qlbh = static_cast<QLinearBroadcastHelper&>(per_iter_bh);
-            auto input0 = per_iter_bh.SpanInput0<T>();
-            const T input1 = per_iter_bh.ScalarInput1<T>();
-            auto output = per_iter_bh.OutputSpan<T>();
+      kernel(input1.data(), qlbh.B_scale, static_cast<T>(qlbh.B_zero_point),
+             &input0, qlbh.A_scale, static_cast<T>(qlbh.A_zero_point),
+             qlbh.C_scale, static_cast<T>(qlbh.C_zero_point),
+             output.data(), output.size(), true);
+    },
+    [kernel](BroadcastHelper& bh) {
+      auto& qlbh = static_cast<QLinearBroadcastHelper&>(bh);
+      auto input0 = bh.SpanInput0<T>();
+      const T input1 = bh.ScalarInput1<T>();
+      auto output = bh.OutputSpan<T>();
 
-            MlasQLinearAdd(input0.data(),
-                           qlbh.A_scale, static_cast<T>(qlbh.A_zero_point),
-                           &input1,
-                           qlbh.B_scale, static_cast<T>(qlbh.B_zero_point),
-                           qlbh.C_scale, static_cast<T>(qlbh.C_zero_point),
-                           output.data(), output.size(), true);
-        },
-        [](BroadcastHelper& per_iter_bh) {
-            QLinearBroadcastHelper& qlbh = static_cast<QLinearBroadcastHelper&>(per_iter_bh);
-            auto input0 = per_iter_bh.SpanInput0<T>();
-            auto input1 = per_iter_bh.SpanInput1<T>();
-            auto output = per_iter_bh.OutputSpan<T>();
+      kernel(input0.data(), qlbh.A_scale, static_cast<T>(qlbh.A_zero_point),
+             &input1, qlbh.B_scale, static_cast<T>(qlbh.B_zero_point),
+             qlbh.C_scale, static_cast<T>(qlbh.C_zero_point),
+             output.data(), output.size(), true);
+    },
+    [kernel](BroadcastHelper& bh) {
+      auto& qlbh = static_cast<QLinearBroadcastHelper&>(bh);
+      auto input0 = bh.SpanInput0<T>();
+      auto input1 = bh.SpanInput1<T>();
+      auto output = bh.OutputSpan<T>();
 
-            MlasQLinearAdd(input0.data(),
-                           qlbh.A_scale, static_cast<T>(qlbh.A_zero_point),
-                           input1.data(),
-                           qlbh.B_scale, static_cast<T>(qlbh.B_zero_point),
-                           qlbh.C_scale, static_cast<T>(qlbh.C_zero_point),
-                           output.data(), output.size(), false);
-        }
-    };
+      kernel(input0.data(), qlbh.A_scale, static_cast<T>(qlbh.A_zero_point),
+             input1.data(), qlbh.B_scale, static_cast<T>(qlbh.B_zero_point),
+             qlbh.C_scale, static_cast<T>(qlbh.C_zero_point),
+             output.data(), output.size(), false);
+    }
+  };
 
-  QLinearImpl<T>(*context, 1.0, functors);
-
+  QLinearImpl<T>(*context, 1.0f, functors);
   return Status::OK();
 }
+
 
 template <typename T>
 Status QLinearMul<T>::Compute(OpKernelContext* context) const {
