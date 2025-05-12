@@ -136,7 +136,12 @@ Status MatMul<T>::Compute(OpKernelContext* ctx) const {
     // be filled out with zeros.
     EigenMatrixMapRowMajor<T> dest(y->MutableData<T>(),
                                    narrow<Eigen::Index>(helper.M()), narrow<Eigen::Index>(helper.N()));
-    dest.setZero();
+    if constexpr (std::is_same<T, MLFloat16>::value) {
+      dest.setConstant(MLFloat16(0.0f));
+    } else {
+      dest.setZero();
+    }
+
     return Status::OK();
   }
 
