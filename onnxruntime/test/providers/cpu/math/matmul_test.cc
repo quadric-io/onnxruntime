@@ -311,7 +311,7 @@ TEST(MathOpTest, MatMul_Float16) {
   run_test(true);
   run_test(false);
 }
-// #endif
+#endif
 
 #if defined(USE_CUDA) || defined(USE_ROCM) || defined(USE_DNNL)
 TEST(MathOpTest, MatMul_bfloat16) {
