@@ -21,6 +21,5 @@
     "cpplint.filters": [
         "-build/include_subdir",
         "-runtime/references"
-    ],
-    "C_Cpp.autoAddFileAssociations": false
+    ]
 }
