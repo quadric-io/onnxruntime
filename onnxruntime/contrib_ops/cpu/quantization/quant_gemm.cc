@@ -26,7 +26,6 @@ class QGemm : protected GemmBase, public MatMulIntegerBase {
         return Status(common::ONNXRUNTIME, common::FAIL, "Failed to cast OpKernelContext to OpKernelContextInternal");
     }
     const auto& session_options = internal_context->GetSessionState().GetSessionOptions();
-    // Test to see if we have access to enable_gpnpu flag
     const bool gpnpu_flag = session_options.enable_gpnpu;
 
     const auto* a = context->Input<Tensor>(IN_A);
