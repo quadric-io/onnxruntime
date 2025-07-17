@@ -118,18 +118,21 @@ class TestQLinearConv(unittest.TestCase):
         # Prepare input
         input_a_info = session_cpu.get_inputs()[0]
         shape_tuple_a = tuple(dim if isinstance(dim, int) else 1 for dim in input_a_info.shape)
+        info = np.iinfo(np.int8)
+        min_val = info.min
+        max_val = info.max
         x_data_a = np.random.randint(
-            low=-128, high=128, size=shape_tuple_a, dtype=np.int8
+            low=min_val, high=max_val, size=shape_tuple_a, dtype=np.int8
         )
         input_dict = {input_a_info.name: x_data_a}
 
-        # Time and run CPU inference
+        # Run CPU inference
         output_cpu = session_cpu.run(
             [session_cpu.get_outputs()[0].name],
             input_dict
         )[0]
 
-        # Time and run GPNPU inference
+        # Run GPNPU inference
         output_gpnpu = session_gpnpu.run(
             [session_gpnpu.get_outputs()[0].name],
             input_dict
