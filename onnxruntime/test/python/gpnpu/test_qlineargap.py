@@ -24,8 +24,6 @@ class TestQGemm(unittest.TestCase):
         # Create a specific ONNX model with a single QGemm node
         self.model_path = "qlineargap.onnx"
         self.create_qgemm_model(self.model_path)
-        self.cpu_jsons = []
-        self.gpnpu_jsons = []
 
     def create_qgemm_model(self, output_model_path):
         # Define the quantization parameters for X
@@ -76,13 +74,11 @@ class TestQGemm(unittest.TestCase):
         onnx.save(model, output_model_path)
 
     def tearDown(self):
-        # Delete the ONNX file and JSON files after testing
+        # Delete the ONNX file after testing
         if os.path.exists(self.model_path):
             os.remove(self.model_path)
-        for json_file in glob.glob("*.json"):
-            os.remove(json_file)
 
-    def performance_and_accuracy_test(self, num_iterations=100):
+    def accuracy_test(self, num_iterations=100):
         for _ in range(num_iterations):
             # CPU Session
             session_options_cpu = ort.SessionOptions()
@@ -114,44 +110,26 @@ class TestQGemm(unittest.TestCase):
             )
             input_dict = {input_a_info.name: x_data_a}
 
-            # Time and run CPU inference
+            # Run CPU inference
             output_cpu = session_cpu.run(
                 [session_cpu.get_outputs()[0].name],
                 input_dict
             )[0]
-            json_name_cpu = session_cpu.end_profiling()
-            self.cpu_jsons.append(json_name_cpu)
 
-            # Time and run GPNPU inference
+            # Run GPNPU inference
             output_gpnpu = session_gpnpu.run(
                 [session_gpnpu.get_outputs()[0].name],
                 input_dict
             )[0]
-            json_name_gpnpu = session_gpnpu.end_profiling()
-            self.gpnpu_jsons.append(json_name_gpnpu)
 
             # Calculate max difference
             max_diff = np.max(np.abs(output_cpu - output_gpnpu))
 
             self.assertLessEqual(max_diff, 1)
 
-    def test_performance_and_accuracy(self):
+    def test_accuracy(self):
         # Run test
-        self.performance_and_accuracy_test(num_iterations=1)
-        self.json_time_profiling()
-
-    def json_time_profiling(self):
-        def get_time(jsons):
-            times = []
-            for json in jsons:
-                cpu_df, gpu_df = json_to_df(load_json(json), lambda x: True)
-                times.extend(cpu_df[cpu_df['name'] == 'QLinearGlobalAveragePool']['duration'].values)
-            return np.mean(np.array(times)), np.std(np.array(times))
-        cpu_mean_time, cpu_std_time = get_time(self.cpu_jsons)
-        gpnpu_mean_time, gpnpu_std_time = get_time(self.gpnpu_jsons)
-        print(f"CPU Time:   {cpu_mean_time:8.3f} ± {cpu_std_time:.3f} ms")
-        print(f"GPNPU Time: {gpnpu_mean_time:8.3f} ± {gpnpu_std_time:.3f} ms")
-
+        self.accuracy_test(num_iterations=1)
 
 if __name__ == '__main__':
     unittest.main()
