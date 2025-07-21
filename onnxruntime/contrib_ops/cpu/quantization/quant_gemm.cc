@@ -8,6 +8,9 @@
 #include "core/providers/cpu/quantization/matmul_integer_base.h"
 #include "core/quantization/quantization.h"
 #include "core/util/math_cpuonly.h"
+#include "core/util/qmath.h"
+#include "core/mlas/inc/mlas.h"
+#include "core/framework/op_kernel_context_internal.h"
 
 namespace onnxruntime {
 namespace contrib {
@@ -18,6 +21,13 @@ class QGemm : protected GemmBase, public MatMulIntegerBase {
   }
 
   Status Compute(OpKernelContext* context) const override {
+    auto* internal_context = dynamic_cast<OpKernelContextInternal*>(context);
+    if (!internal_context) {
+        return Status(common::ONNXRUNTIME, common::FAIL, "Failed to cast OpKernelContext to OpKernelContextInternal");
+    }
+    const auto& session_options = internal_context->GetSessionState().GetSessionOptions();
+    const bool gpnpu_flag = session_options.enable_gpnpu;
+
     const auto* a = context->Input<Tensor>(IN_A);
     const auto* b = packed_b_ ? nullptr : context->Input<Tensor>(IN_B);
     const auto& b_shape = b ? b->Shape() : b_shape_;
@@ -106,9 +116,16 @@ class QGemm : protected GemmBase, public MatMulIntegerBase {
     gemm_param.PerColumnZeroPoints = !IsScalarOr1ElementVector(b_zp);
 
     std::vector<float> output_scales = ComputeOutputScale(a_scale, b_scale, y_scale);
-    std::optional<MLAS_QGEMM_SCALE_BIAS_OUTPUT_PROCESSOR> scale_bias_proc_ptr;
+
+    std::optional<MLAS_QGEMM_REQUANT_OUTPUT_PROCESSOR_FIXEDPOINT> requant_proc_ptr_fixedpoint;
     std::optional<MLAS_QGEMM_REQUANT_OUTPUT_PROCESSOR> requant_proc_ptr;
-    SetPostProcessor(y_zp, N, output_scales, y, gemm_param, scale_bias_proc_ptr, requant_proc_ptr);
+    std::optional<MLAS_QGEMM_SCALE_BIAS_OUTPUT_PROCESSOR> scale_bias_proc_ptr;
+
+    if (gpnpu_flag) {
+      SetPostProcessorFixedPoint(y_zp, N, output_scales, y, gemm_param, requant_proc_ptr_fixedpoint);
+    } else {
+      SetPostProcessor(y_zp, N, output_scales, y, gemm_param, scale_bias_proc_ptr, requant_proc_ptr);
+    }
 
     MlasGemmBatch(gemm_shape, &gemm_param, 1, context->GetOperatorThreadPool());
     return Status::OK();
@@ -209,6 +226,32 @@ class QGemm : protected GemmBase, public MatMulIntegerBase {
           output_scales.size() > 1 ? MLAS_QUANTIZATION_GRANULARITY::PerColumn : MLAS_QUANTIZATION_GRANULARITY::PerMatrix);
       gemm_param.OutputProcessor = &*scale_bias_proc_ptr;
     }
+  }
+
+  static void SetPostProcessorFixedPoint(
+      const Tensor* y_zp,
+      size_t out_lda,
+      const std::vector<float>& output_scales,
+      Tensor* y,
+      MLAS_GEMM_QUANT_DATA_PARAMS& gemm_param,
+      std::optional<MLAS_QGEMM_REQUANT_OUTPUT_PROCESSOR_FIXEDPOINT>& requant_proc_ptr
+  ) {
+      ORT_ENFORCE(y_zp != nullptr, "GPNPU mode requires quantized output (int8/uint8); y_zp must not be null.");
+
+      bool is_y_signed = y->IsDataType<int8_t>();
+      int32_t y_zero_point = is_y_signed ? *y_zp->Data<int8_t>() : *y_zp->Data<uint8_t>();
+
+      requant_proc_ptr.emplace(
+          y->MutableDataRaw(),
+          out_lda,
+          nullptr,                 // Bias is not used here
+          output_scales.data(),
+          output_scales.size() > 1,
+          y_zero_point,
+          is_y_signed
+      );
+
+      gemm_param.OutputProcessor = &*requant_proc_ptr;
   }
 };
 
