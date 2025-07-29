@@ -326,7 +326,8 @@ MlasQLinearGlobalAveragePoolNchw(
     int32_t ZeroPointOutput,
     size_t Channels,
     size_t ImageSize,
-    int32_t* AccumulateBuffer
+    int32_t* AccumulateBuffer,
+    bool gpnpu_mode
     )
 {
     float scale = CheckQLinearGlobalAveragePoolScaleAndSize(ScaleInput, ScaleOutput, ImageSize);
@@ -415,8 +416,13 @@ MlasQLinearGlobalAveragePoolNchw(
         *sum_buffer++ = _mm_cvtsi128_si32(vsums);
     }
 
+    if (gpnpu_mode){
+    MlasRequantizeOutputFixedPoint(AccumulateBuffer, Channels, Output, Channels, nullptr, &scale, false,
+                         static_cast<T8Bits>(ZeroPointOutput), 0, 0, 1, Channels);
+    } else {
     MlasRequantizeOutput(AccumulateBuffer, Channels, Output, Channels, nullptr, &scale, false,
                          static_cast<T8Bits>(ZeroPointOutput), 0, 0, 1, Channels);
+    }
 }
 
 template <typename T8Bits>
@@ -1128,7 +1134,8 @@ MlasQLinearGlobalAveragePoolNchw<int8_t>(
     int32_t ZeroPointOutput,
     size_t Channels,
     size_t ImageSize,
-    int32_t* AccumulateBuffer
+    int32_t* AccumulateBuffer,
+    bool gpnpu_mode = false
     );
 
 template
@@ -1143,7 +1150,8 @@ MlasQLinearGlobalAveragePoolNchw<uint8_t>(
     int32_t ZeroPointOutput,
     size_t Channels,
     size_t ImageSize,
-    int32_t* AccumulateBuffer
+    int32_t* AccumulateBuffer,
+    bool gpnpu_mode = false
     );
 
 template
