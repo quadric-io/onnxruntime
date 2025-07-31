@@ -3729,9 +3729,10 @@ GatherBlockQuantized is a Gather with data quantized. It is similar to Gather (h
   where `scale_qfp` is the scale converted into fixed-point representation.
 
   - `X` is the quantized input tensor (int8).
+  - `output_frac_bits` frac bits associated with int32 Y_fixed value.
   - `scale` is a floating-point scalar that will be inverted (1/scale) and converted into a fixed-point multiplier `scale_qfp`.
   - `zero_point` is the quantization zero-point (int8), which is subtracted from `X` before scaling.
-  - `Y_fixed` is the output tensor (int32) interpreted as a fixed-point representation.
+  - `Y_fixed` is the output tensor (int32) interpreted as a fixed-point representation with frac bits `output_frac_bits`.
 
   Unlike `DequantizeLinear`, which produces floating-point outputs, this operator retains
   a fixed-point integer format to align with Quadric's CGC execution.
@@ -3741,17 +3742,20 @@ GatherBlockQuantized is a Gather with data quantized. It is similar to Gather (h
 
       // Inputs
       .Input(0, "X", "N-D quantized input tensor (int8).", "T")
-      .Input(1, "scale", "Scalar scale factor (float). Converted to fixed-point format internally.", "T1")
-      .Input(2, "zero_point", "Scalar zero-point offset (int8). Must match type of X.", "T2")
+
+      .Input(1, "y_frac_bits", "Number of fractional bits for output type (int8)", "T1")
+      .Input(2, "scale", "Scalar scale factor (float). Converted to fixed-point format internally.", "T2")
+      .Input(3, "zero_point", "Scalar zero-point offset (int8). Must match type of X.", "T3")
 
       // Outputs
-      .Output(0, "Y", "N-D output tensor (int32). Fixed-point representation.", "T3")
+      .Output(0, "Y", "N-D output tensor (int32). Fixed-point representation.", "T4")
 
       // Type Constraints
       .TypeConstraint("T", {"tensor(int8)"}, "Input tensor must be int8.")
-      .TypeConstraint("T1", {"tensor(float)"}, "Scale must be a floating-point scalar.")
-      .TypeConstraint("T2", {"tensor(int8)"}, "Zero point must be int8, matching the input tensor type.")
-      .TypeConstraint("T3", {"tensor(int32)"}, "Output tensor is int32 (fixed-point representation).")
+      .TypeConstraint("T1", {"tensor(int8)"}, "Fractional bits for output are in int8.")
+      .TypeConstraint("T2", {"tensor(float)"}, "Scale must be a floating-point scalar.")
+      .TypeConstraint("T3", {"tensor(int8)"}, "Zero point must be int8, matching the input tensor type.")
+      .TypeConstraint("T4", {"tensor(int32)"}, "Output tensor is int32 (fixed-point representation).")
 
       // Shape Inference
       .TypeAndShapeInferenceFunction([](ONNX_NAMESPACE::InferenceContext& ctx) {
