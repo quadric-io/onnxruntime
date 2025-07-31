@@ -9,6 +9,7 @@
 #include "core/util/math.h"
 #include "core/mlas/inc/mlas.h"
 #include <functional>
+#include "core/framework/op_kernel_context_internal.h"
 
 using onnxruntime::concurrency::ThreadPool;
 
@@ -27,13 +28,14 @@ Status ComputeQLinearGlobalAvgPool(
     int64_t C,
     int64_t image_size,
     bool channels_last,
-    concurrency::ThreadPool* tp) {
+    concurrency::ThreadPool* tp,
+    bool gpnpu_mode) {
   if (!channels_last || C == 1) {
     auto worker = [=](std::ptrdiff_t first, std::ptrdiff_t last) {
       const T8Bits* input = (const T8Bits*)(x + (first * image_size));
       T8Bits* output = (T8Bits*)(y + first);
       std::vector<int32_t> acc_buffer(MlasQLinearSafePaddingElementCount(sizeof(int32_t), last - first));
-      MlasQLinearGlobalAveragePoolNchw(input, x_scale, x_zero_point, output, y_scale, y_zero_point, last - first, narrow<size_t>(image_size), acc_buffer.data());
+      MlasQLinearGlobalAveragePoolNchw(input, x_scale, x_zero_point, output, y_scale, y_zero_point, last - first, narrow<size_t>(image_size), acc_buffer.data(), gpnpu_mode);
     };
     concurrency::ThreadPool::TryParallelFor(
         tp, static_cast<std::ptrdiff_t>(N * C), {1.0 * image_size, 1.0, 8.0 * image_size}, worker);
@@ -72,7 +74,8 @@ template Status ComputeQLinearGlobalAvgPool<int8_t>(
     int64_t C,
     int64_t image_size,
     bool channels_last,
-    concurrency::ThreadPool* tp);
+    concurrency::ThreadPool* tp,
+    bool gpnpu_mode = false);
 
 template Status ComputeQLinearGlobalAvgPool<uint8_t>(
     const uint8_t* x,
@@ -85,7 +88,9 @@ template Status ComputeQLinearGlobalAvgPool<uint8_t>(
     int64_t C,
     int64_t image_size,
     bool channels_last,
-    concurrency::ThreadPool* tp);
+    concurrency::ThreadPool* tp,
+    bool gpnpu_mode = false
+  );
 
 Status QLinearGlobalAveragePool::Compute(OpKernelContext* context) const {
   const auto tensor_x_scale = context->Input<Tensor>(1);
@@ -124,6 +129,15 @@ Status QLinearGlobalAveragePool::Compute(OpKernelContext* context) const {
   const float y_scale = *(tensor_y_scale->Data<float>());
 
   auto dtype = X.GetElementType();
+
+  auto* internal_context = dynamic_cast<OpKernelContextInternal*>(context);
+  if (!internal_context) {
+      return Status(common::ONNXRUNTIME, common::FAIL, "Failed to cast OpKernelContext to OpKernelContextInternal");
+  }
+  const auto& session_options = internal_context->GetSessionState().GetSessionOptions();
+
+  const bool gpnpu_flag = session_options.enable_gpnpu;
+
   if (dtype == ONNX_NAMESPACE::TensorProto_DataType_UINT8) {
     return ComputeQLinearGlobalAvgPool(X.Data<uint8_t>(), x_scale, *(tensor_x_zero_point->Data<uint8_t>()),
                                        Y.MutableData<uint8_t>(), y_scale, *(tensor_y_zero_point->Data<uint8_t>()),
@@ -131,7 +145,7 @@ Status QLinearGlobalAveragePool::Compute(OpKernelContext* context) const {
   } else {
     return ComputeQLinearGlobalAvgPool(X.Data<int8_t>(), x_scale, *(tensor_x_zero_point->Data<int8_t>()),
                                        Y.MutableData<int8_t>(), y_scale, *(tensor_y_zero_point->Data<int8_t>()),
-                                       N, C, image_size, channels_last_, tp);
+                                       N, C, image_size, channels_last_, tp, gpnpu_flag);
   }
 }
 

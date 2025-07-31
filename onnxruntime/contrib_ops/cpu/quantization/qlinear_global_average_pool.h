@@ -33,7 +33,8 @@ Status ComputeQLinearGlobalAvgPool(
     int64_t C,
     int64_t image_size,
     bool channels_last,
-    concurrency::ThreadPool* tp);
+    concurrency::ThreadPool* tp,
+    bool gpnpu_mode = false);
 
 }  // namespace contrib
 }  // namespace onnxruntime
