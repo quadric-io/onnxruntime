@@ -240,6 +240,8 @@ class SymbolicShapeInference:
             "QLinearAveragePool": self._infer_qlinear_unary_op,
             # Quadric custom operators
             "QuadricCustomOp": self._infer_custom_op,
+            "QuantizeLinearFixedPoint": self._infer_QuantizeLinearFixedPoint,
+            "DequantizeLinearFixedPoint": self._infer_DequantizeLinearFixedPoint,
         }
         self.aten_op_dispatcher_ = {
             "embedding": self._infer_Gather,
@@ -1047,6 +1049,35 @@ class SymbolicShapeInference:
         else:
             vi = self.known_vi_[node.output[0]]
             vi.CopyFrom(helper.make_tensor_value_info(node.output[0], attr_map["elem_type"].i, attr_map["shape"].ints))
+
+    def _infer_QuantizeLinearFixedPoint(self, node):
+        """Copy shape from input[0] to output[0], and set type to INT8"""
+        output_name = node.output[0]
+        input_name = node.input[0]
+
+        input_type = get_elem_type_from_type_proto(self.known_vi_[input_name].type)
+        input_shape = self._get_shape(node, 0)
+
+        self.known_vi_[output_name] = helper.make_tensor_value_info(
+            output_name,
+            onnx.TensorProto.INT8,
+            input_shape
+        )
+
+    def _infer_DequantizeLinearFixedPoint(self, node):
+        """Copy shape from input[0] to output[0], and set type to INT32"""
+        output_name = node.output[0]
+        input_name = node.input[0]
+
+        input_type = get_elem_type_from_type_proto(self.known_vi_[input_name].type)
+        input_shape = self._get_shape(node, 0)
+
+        self.known_vi_[output_name] = helper.make_tensor_value_info(
+            output_name,
+            onnx.TensorProto.INT32,
+            input_shape
+        )
+
 
     def _infer_ConcatFromSequence(self, node):
         seq_shape = self._get_shape(node, 0)
