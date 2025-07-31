@@ -17,7 +17,7 @@ class TestDequantizeLinearFixedPoint(unittest.TestCase):
         self.zero_point_value = 5
         self.input_data = np.array([-128, 1, 2, 3, 127], dtype=np.int8)
 
-        self.output_frac_bits = 27 # precomputed base off of scale_value, zero_point_value, and input data
+        self.output_frac_bits = 27
 
         self.create_model_fixed_point(self.model_fixed_point_path)
         self.create_model_float(self.model_float_path)
@@ -28,13 +28,14 @@ class TestDequantizeLinearFixedPoint(unittest.TestCase):
         output_tensor = helper.make_tensor_value_info("output", TensorProto.INT32, self.input_shape)
 
         # Initializer tensors (constants)
+        y_frac_bits = helper.make_tensor(name="y_frac_bits", data_type=TensorProto.INT8, dims=(), vals=[self.output_frac_bits])
         dq_s = helper.make_tensor(name="dq_s", data_type=TensorProto.FLOAT, dims=(), vals=[self.scale_value])
         dq_zp = helper.make_tensor(name="dq_zp", data_type=TensorProto.INT8, dims=(), vals=[self.zero_point_value])
 
         # Define the node (DequantizeLinearFixedPoint op)
         node = helper.make_node(
             "DequantizeLinearFixedPoint",  # Custom op name
-            inputs=["input", "dq_s", "dq_zp"],
+            inputs=["input", "y_frac_bits", "dq_s", "dq_zp"],
             outputs=["output"],
             domain="com.quadric"  # Custom domain
         )
@@ -45,7 +46,7 @@ class TestDequantizeLinearFixedPoint(unittest.TestCase):
             "test_graph",
             [input_tensor],
             [output_tensor],
-            initializer=[dq_s, dq_zp]
+            initializer=[y_frac_bits, dq_s, dq_zp]
         )
 
         # Create ONNX model
