@@ -1417,7 +1417,8 @@ MlasQLinearGlobalAveragePoolNchw(
     int32_t ZeroPointOutput,
     size_t Channels,
     size_t ImageSize,
-    int32_t* AccumulateBuffer
+    int32_t* AccumulateBuffer,
+    bool gpnpu_mode = false
     );
 
 template <typename T8Bits>
