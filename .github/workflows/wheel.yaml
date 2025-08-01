@@ -19,11 +19,6 @@ on:
       - main
 
 jobs:
-  dump_context:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Dump GitHub context
-        run: echo '${{ toJson(github) }}'
   build_and_upload_wheel_linux:
     runs-on: The_CTOs_Choice
     container:
