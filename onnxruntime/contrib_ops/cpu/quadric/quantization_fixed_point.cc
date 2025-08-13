@@ -5,6 +5,7 @@
 #include <iostream>
 #include <iomanip>  // For std::setprecision
 #include "core/mlas/inc/mlas.h"
+#include "fixed_point.h"
 
 namespace onnxruntime {
 namespace contrib {
@@ -30,12 +31,6 @@ ONNX_OPERATOR_KERNEL_EX(
         .TypeConstraint("T3", DataTypeImpl::GetTensorType<int8_t>())    // Zero-point
         .TypeConstraint("T4", DataTypeImpl::GetTensorType<int32_t>()),  // Output
     DequantizeLinearFixedPoint);
-
-// Fixed-point multiplication with provided shift
-int32_t fixedPointMultiply(int32_t a, int32_t b, int shift) {
-  int64_t product = static_cast<int64_t>(a) * static_cast<int64_t>(b);
-  return (shift > 0) ? (product >> shift) : (product << -shift);
-}
 
 Status DequantizeLinearFixedPoint::Compute(OpKernelContext* ctx) const {
   // Retrieve input tensors
