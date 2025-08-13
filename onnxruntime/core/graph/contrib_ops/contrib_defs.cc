@@ -3816,6 +3816,67 @@ GatherBlockQuantized is a Gather with data quantized. It is similar to Gather (h
         updateOutputShape(ctx, 0, input_shape);
       });
 
+  ONNX_CONTRIB_OPERATOR_SCHEMA(LayernormFixedPoint)
+      .SetDomain(kQuadricDomain)
+      .SinceVersion(1)
+      .SetDoc(R"DOC(
+        This is the layernorm fixed point implementation.
+        It performs the following computation in fixed point.
+
+        Mean = ReduceMean<axes=normalized_axes>(X)
+        D = Sub(X, Mean)
+        DD = Mul(D, D)
+        Var = ReduceMean<axes=normalized_axes>(DD)
+        VarEps = Add(Var, epsilon)
+        StdDev = Sqrt(VarEps)
+        InvStdDev = Reciprocal(StdDev)
+        Normalized = Mul(D, InvStdDev)
+        NormalizedScaled = Mul(Normalized, Scale)
+        Y = Add(NormalizedScaled, B)
+
+        The selection for the number of fractional bits is based on the analysis done for
+        widthwise layernorm implementation inside sdk.
+      )DOC")
+
+      // Inputs
+      .Input(0, "X", "N-D input tensor, expected to be int32, fixed-point representation.", "T")
+      .Input(1, "x_frac_bits", "A scalar tensor representing the number of fractional bits of the input tensor (int8).", "T1")
+      .Input(2, "scale", "A scalar or 1D float tensor representing the scale factor (gamma).", "T2")
+      .Input(3, "bias", "A scalar or 1D float tensor representing the bias offset (beta).", "T3")
+      .Input(4, "out_frac_bits", "A scalar tensor representing the number of fractional bits for the final fixed-point result (int8).", "T4")
+
+      // Outputs
+      .Output(0, "Y", "N-D output tensor, quantized to signed int32.", "T5")
+
+      // Type Constraints
+      .TypeConstraint("T", {"tensor(int32)"}, "Input tensor must be int32.")
+      .TypeConstraint("T1", {"tensor(int8)"}, "Input fractional bits must be int8.")
+      .TypeConstraint("T2", {"tensor(float)"}, "Scale (gamma) must be a floating-point tensor.")
+      .TypeConstraint("T3", {"tensor(float)"}, "Bias (beta) must be a floating-point tensor.")
+      .TypeConstraint("T4", {"tensor(int8)"}, "Output fractional bits must be int8.")
+      .TypeConstraint("T5", {"tensor(int32)"}, "Output tensor must be int32.")
+
+      // Attributes
+      .Attr("axis", "The axis along which to perform the normalization. Defaults to -1. Supported for 3D tensors are axis=1 (channels) and axis=2 (width).", ONNX_NAMESPACE::AttributeProto::INT, static_cast<int64_t>(-1))
+      .Attr("epsilon", "A small value added to the variance to prevent division by zero.", ONNX_NAMESPACE::AttributeProto::FLOAT, 1e-05f)
+      .Attr("stash_type", "Type of Mean and InvStdDev. This also specifies stage one’s computation precision. Defaults to -1.", ONNX_NAMESPACE::AttributeProto::INT, static_cast<int64_t>(-1))
+      .Attr("wt_fbits", "The number of fractional bits to use for the fixed-point representation of weights. Defaults to 31.", ONNX_NAMESPACE::AttributeProto::INT, static_cast<int64_t>(31))
+      .Attr("bias_fbits", "The number of fractional bits to use for the fixed-point representation of bias. Defaults to 31.", ONNX_NAMESPACE::AttributeProto::INT, static_cast<int64_t>(31))
+
+      // Shape Inference
+      .TypeAndShapeInferenceFunction([](ONNX_NAMESPACE::InferenceContext& ctx) {
+        // Output tensor 'Y' has the same shape as the input tensor 'X'.
+        propagateShapeAndTypeFromFirstInput(ctx);
+
+        auto y_type = ctx.getOutputType(0);
+        y_type->mutable_tensor_type()->set_elem_type(ONNX_NAMESPACE::TensorProto::INT32);
+        if (!hasInputShape(ctx, 0))
+          return;
+
+        auto& input_shape = getInputShape(ctx, 0);
+        updateOutputShape(ctx, 0, input_shape);
+      });
+
 #ifdef ENABLE_TRAINING_OPS
   // Should remove the shrunken_gather include from ENABLE_TRAINING_OPS once 1). compute optimizer is enabled for inference or
   // 2). this is needed by inference for other purpose.
