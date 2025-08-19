@@ -3816,6 +3816,164 @@ GatherBlockQuantized is a Gather with data quantized. It is similar to Gather (h
         updateOutputShape(ctx, 0, input_shape);
       });
 
+  ONNX_CONTRIB_OPERATOR_SCHEMA(LayernormFixedPoint)
+      .SetDomain(kQuadricDomain)
+      .SinceVersion(1)
+      .SetDoc(R"DOC(
+    Analysis taken from the channel-wise LayerNorm is copied here for completeness
+    Still applies the same to row-wise LayerNorm
+    However, now N is the number of columns since we're going over width
+
+    Analysis for squareFracBits:
+    X^2 < (2^(31 - inFracBits))^2 = 2^(2 * (31 - inFracBits))
+    So we have squareFracBits = 31 - (2 * (31 - inFracBits)) = 2 * inFracBits - 31
+
+    Forward analysis for normFracBits:
+    |X_norm| = |Xi - mean| / sqrt(var + epsilon)
+    Since epsilon <= sqrt(var + epsilon) and epsilon > 0, then
+    |X_norm| <= |Xi - mean| / epsilon <= max|Xi - mean| / epsilon
+    |X_norm| <= max|Xi - mean| / sqrt(1/N*sum_1,N((Xi - mean)^2))
+    |X_norm| <= max|Xi - mean| / (1/sqrt(N) * sqrt(sum_1,N((Xi - mean)^2)))
+    In general, for any N numbers a1,a2,...,aN, we know that max|a_i| <= sqrt(sum_1,N(a_i^2)).
+    Applying this to max|Xi - mean|, we get:
+    |X_norm| <= sqrt(sum_1,N((Xi - mean)^2)) / (1/sqrt(N) * sqrt(sum_1,N((Xi - mean)^2)))
+    |X_norm| <= sqrt(N)
+    Using this to find the frac bits (f) for X_norm:
+    |X_norm| <= sqrt(N) < 2^(31 - f)
+    log2(sqrt(N)) < 31 - f
+    f < 31 - 1/2 * log2(N)
+
+    ------------------------------
+
+    Our usage of int64 allows for increased precision, but overflow still needs to be handled by carefully
+    selecting frac bits.
+    The following analysis is used to use int64 as much as possible while avoiding overflow.
+    It's possible to sacrifice some accuracy for perf by using 32b math for some parts (e.g. variance), but
+    the focus of this analysis is purely maximizing accuracy while avoiding overflow.
+
+
+    Let IFB = inFracBits
+    Let SFB = squareFracBits
+    Let logCols = log_2(numCols)
+
+
+    ----- Analysis for qSum and qMean -----
+    We can sum up qSum with the original IFB, losing no precision
+    We also gain logCols int bits after the calculateTileSum
+    So qSumIntBits = (31 - IFB + logCols), and qSumFracBits = IFB
+    From here we can use 64b div by numCols to get qMean
+      qMean ends up with (31 - IFB) int bits and IFB frac bits
+
+
+    ----- Analysis for qMean 64b -> 32b -----
+    We need a 32b version of qMean during norm calculation
+    qMean already fits in 32b, so we can just cast as FxInType
+
+
+    ----- Analysis for qSumSquare and qMeanSquare -----
+    qDataInt64^2 needs (31 - SFB) int bits and 2*IFB frac bits
+      31 - SFB = 31 - 2*IFB + 31
+                = 62 - 2*IFB
+
+    So after calculateTileSum, qSumSquare will need (62 - 2*IFB + logCols) int bits
+    That means qSumSquare will only be able to fit at most (63 - 62 + 2*IFB - logCols) frac bits
+      Simplifies to (1 + 2*IFB - logCols)
+    This value will be < the 2*IFB frac bits from the qDataInt64^2 intermediate value
+    So we want to shift the intermediate value to match the number of frac bits qSumSquare will be able to hold
+
+    qDataInt64SquaredFB - shiftAmount = qSumSquareFracBits
+    shiftAmount = qDataInt64SquaredFB - qSumSquareFracBits
+                = 2*IFB - 1 - 2*IFB + logCols
+                = logCols - 1
+
+    So now qSumSquare ends up with (62 - 2*IFB + logCols) int bits and (1 + 2*IFB - logCols) frac bits
+
+    From here we can use 64b div to get qMeanSquare after we get qSumSquare using calculateTileSum
+      qMeanSquare ends up with (31 - SFB) = (62 - 2*IFB) int bits and (1 + 2*IFB - logCols) frac bits
+
+
+    ----- Analysis for qMeanSquare 64b -> 32b -----
+    Not yet needed, but could be if we want to reduce the precision of a calculation like
+      variance to increase performance, so the analysis is included here
+    From the previous analysis taken from the channel-wise version of LayerNorm (pasted above),
+      we know that the number of frac bits X_i^2 can take on is SFB = 2*IFB - 31
+
+    qMeanSquareFracBits - shiftAmount = SFB
+    shiftAmount = qMeanSquareFracBits - SFB
+                = 1 + 2*IFB - logCols - 2*IFB + 31
+                = 32 - logCols
+
+    After shifting, we simply cast as FX32 with SFB frac bits
+
+
+    ----- Analysis for qVariance -----
+    qVariance = qMeanSquare - qMean^2
+    Let us first determine how many bits qMean^2 would have
+      qMean2FracBits = 2(qMeanFracBits)
+                      = 2*IFB
+      So qMean^2 ends up with (31 - SFB) = (62 - 2*IFB) int bits and 2*IFB frac bits
+    Now we need qMeanSquare and qMean^2 to have the same number of frac bits to subtract them
+      qMeanSquareFracBits - qMean2FracBits = 1 + 2*IFB - logCols - 2*IFB
+                                            = 1 - logCols
+      Since logCols >= 1 in our case, we might need to shift qMeanSquare left by (logCols - 1)
+      Now both qMeanSquare and qMean^2 (and thus qVariance) have (2*IFB) frac bits
+    The number of int bits needed for qVariance is the max needed from qMeanSquare or qMean^2
+      qMeanSquare has (62 - 2*IFB) int bits
+      qMean^2 has (31 - SFB) int bits
+        Simplifies to (31 - 2*IFB + 31) = (62 - 2*IFB)
+      They are actually the same, so we can use either
+    So qVariance ends up with (62 - 2*IFB) int bits and (2*IFB) frac bits
+
+
+    ----- Analysis for qVariance 64b -> 32b -----
+    qVariance uses (31 - SFB) int bits, so it can use SFB number of frac bits in 32b
+
+    qVariance64FracBits - shiftAmount = SFB
+    shiftAmount = qVariance64FracBits - SFB
+                = 2*IFB - 2*IFB + 31
+                = 31
+
+    After shifting, we simply cast as FX32 with SFB frac bits
+      )DOC")
+
+      // Inputs
+      .Input(0, "X", "N-D input tensor, expected to be int32, fixed-point representation.", "T")
+      .Input(1, "x_frac_bits", "A scalar tensor representing the number of fractional bits of the input tensor (int8).", "T1")
+      .Input(2, "scale", "A scalar or 1D float tensor representing the scale factor (gamma).", "T2")
+      .Input(3, "bias", "A scalar or 1D float tensor representing the bias offset (beta).", "T3")
+      .Input(4, "out_frac_bits", "A scalar tensor representing the number of fractional bits for the final fixed-point result (int8).", "T4")
+
+      // Outputs
+      .Output(0, "Y", "N-D output tensor, quantized to signed int32.", "T5")
+
+      // Type Constraints
+      .TypeConstraint("T", {"tensor(int32)"}, "Input tensor must be int32.")
+      .TypeConstraint("T1", {"tensor(int8)"}, "Input fractional bits must be int8.")
+      .TypeConstraint("T2", {"tensor(float)"}, "Scale (gamma) must be a floating-point tensor.")
+      .TypeConstraint("T3", {"tensor(float)"}, "Bias (beta) must be a floating-point tensor.")
+      .TypeConstraint("T4", {"tensor(int8)"}, "Output fractional bits must be int8.")
+      .TypeConstraint("T5", {"tensor(int32)"}, "Output tensor must be int8.")
+
+      // Attributes
+      .Attr("axis", "The axis along which to perform the normalization. Defaults to -1. Supported for 3D tensors are axis=1 (channels) and axis=2 (width).", ONNX_NAMESPACE::AttributeProto::INT, static_cast<int64_t>(-1))
+      .Attr("epsilon", "A small value added to the variance to prevent division by zero.", ONNX_NAMESPACE::AttributeProto::FLOAT, 1e-05f)
+      .Attr("stash_type", "Type of Mean and InvStdDev. This also specifies stage one’s computation precision. Defaults to -1.", ONNX_NAMESPACE::AttributeProto::INT, static_cast<int64_t>(-1))
+      .Attr("gbFbits", "The number of fractional bits to use for the fixed-point representation of gamma and beta. Defaults to 31.", ONNX_NAMESPACE::AttributeProto::INT, static_cast<int64_t>(31))
+
+      // Shape Inference
+      .TypeAndShapeInferenceFunction([](ONNX_NAMESPACE::InferenceContext& ctx) {
+        // Output tensor 'Y' has the same shape as the input tensor 'X'.
+        propagateShapeAndTypeFromFirstInput(ctx);
+
+        auto y_type = ctx.getOutputType(0);
+        y_type->mutable_tensor_type()->set_elem_type(ONNX_NAMESPACE::TensorProto::INT32);
+        if (!hasInputShape(ctx, 0))
+          return;
+
+        auto& input_shape = getInputShape(ctx, 0);
+        updateOutputShape(ctx, 0, input_shape);
+      });
+
 #ifdef ENABLE_TRAINING_OPS
   // Should remove the shrunken_gather include from ENABLE_TRAINING_OPS once 1). compute optimizer is enabled for inference or
   // 2). this is needed by inference for other purpose.
