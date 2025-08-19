@@ -84,21 +84,36 @@ jobs:
       with:
         name: ort-wheel-mac
         path: artifacts/
-    - name: Count releases
-      id: count_releases
+    - name: Get next release tag
+      id: get_tag
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        count=$(curl --request GET \
-          --url https://api.github.com/repos/${{ github.repository }}/releases \
-          --header "Authorization: Bearer $GITHUB_TOKEN" | jq length)
-        echo "count=$count" >> $GITHUB_ENV
+        latest_tag=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
+          https://api.github.com/repos/${{ github.repository }}/releases \
+          | jq -r '.[].tag_name' \
+          | grep -E '^v[0-9]+$' \
+          | sort -V \
+          | tail -n1)
+
+        echo "Latest tag: $latest_tag"
+
+        if [ -z "$latest_tag" ]; then
+          echo "❌ Error: No previous tags found matching 'v<number>' format. Cannot compute next tag."
+          exit 1
+        fi
+
+        next_num=$(( ${latest_tag#v} + 1 ))
+        next_tag="v$next_num"
+
+        echo "next_tag=$next_tag" >> $GITHUB_ENV
+        echo "next_tag=$next_tag" >> $GITHUB_OUTPUT
     - name: Create Release and Upload Both Assets
       uses: softprops/action-gh-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: v${{ env.count }}
-        name: Release v${{ env.count }}
+        tag_name: ${{ steps.get_tag.outputs.next_tag }}
+        name: Release ${{ steps.get_tag.outputs.next_tag }}
         files: |
           artifacts/*.whl
