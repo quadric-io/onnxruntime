@@ -120,8 +120,9 @@ int deriveFractionalBits(float scalar, int qfpSize) {
 }
 
 // Function to convert scalar to qfp
+template <typename T>
 int
-scalarToQfp(float value, int fracBits)
+scalarToQfp(T value, int fracBits)
 {
     double mult = static_cast<double>(1ULL << fracBits);
     int qfp = static_cast<int>(static_cast<double>(value) * mult);
