@@ -1055,29 +1055,40 @@ class SymbolicShapeInference:
         output_name = node.output[0]
         input_name = node.input[0]
 
-        input_type = get_elem_type_from_type_proto(self.known_vi_[input_name].type)
-        input_shape = self._get_shape(node, 0)
+        if input_name not in self.known_vi_:
+            return
 
-        self.known_vi_[output_name] = helper.make_tensor_value_info(
+        input_shape = self._get_shape(node, 0)
+        if input_shape is None:
+            return
+
+        # Create the output value info and assign it to the known value info
+        vi = self.known_vi_[output_name]
+        vi.CopyFrom(helper.make_tensor_value_info(
             output_name,
             onnx.TensorProto.INT8,
             input_shape
-        )
+        ))
 
     def _infer_DequantizeLinearFixedPoint(self, node):
         """Copy shape from input[0] to output[0], and set type to INT32"""
         output_name = node.output[0]
         input_name = node.input[0]
 
-        input_type = get_elem_type_from_type_proto(self.known_vi_[input_name].type)
-        input_shape = self._get_shape(node, 0)
+        if input_name not in self.known_vi_:
+            return
 
-        self.known_vi_[output_name] = helper.make_tensor_value_info(
+        input_shape = self._get_shape(node, 0)
+        if input_shape is None:
+            return
+
+        # Create the output value info and assign it to the known value info
+        vi = self.known_vi_[output_name]
+        vi.CopyFrom(helper.make_tensor_value_info(
             output_name,
             onnx.TensorProto.INT32,
             input_shape
-        )
-
+        ))
 
     def _infer_ConcatFromSequence(self, node):
         seq_shape = self._get_shape(node, 0)
