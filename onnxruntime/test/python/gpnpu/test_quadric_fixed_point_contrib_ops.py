@@ -45,18 +45,13 @@ class TestQuantizeLinearFixedPoint(unittest.TestCase):
         """
         Create an ONNX model with a single QuantizeLinearFixedPoint node.
         """
-        self.model_fixed_point_path = "quantize_linear_fixed_point_test.onnx"
-        self.model_float_path = "quantize_linear_float_test.onnx"
         self.input_output_shape = [1, 1, 2, 3]
         self.input_data_frac_bits = 27
         self.input_data = np.array([-15, 1.4, 2, 3.4,
       14.5, 15.5], dtype=np.float32).reshape(self.input_output_shape)
         self.expected_output = np.array([[-128, 61, 93, 127, 127, 127]], dtype=np.int8).reshape(self.input_output_shape)
-        self.create_model_fixed_point(self.model_fixed_point_path)
-        self.create_model_float(self.model_float_path)
 
-    def create_model_fixed_point(self, model_path, output_info_defined=True):
-
+    def _create_model_fixed_point(self, output_info_defined=True):
         # Create input & output tensors
         input_tensor = helper.make_tensor_value_info("input", TensorProto.INT32, self.input_output_shape)
         if output_info_defined:
@@ -100,12 +95,9 @@ class TestQuantizeLinearFixedPoint(unittest.TestCase):
             ir_version=7
         )
 
-        # Save model
-        onnx.save(onnx_model, model_path)
         return onnx_model
 
-    def create_model_float(self, model_path):
-
+    def _create_model_float(self):
         # Create input & output tensors
         input_tensor = helper.make_tensor_value_info("input", TensorProto.FLOAT, self.input_output_shape)
         output_tensor = helper.make_tensor_value_info("output", TensorProto.INT8, self.input_output_shape)
@@ -144,34 +136,23 @@ class TestQuantizeLinearFixedPoint(unittest.TestCase):
             ir_version=7
         )
 
-        # Save model
-        onnx.save(onnx_model, model_path)
         return onnx_model
 
-    def tearDown(self):
-        """
-        Remove the generated ONNX file after tests.
-        """
-        if os.path.exists(self.model_fixed_point_path):
-            os.remove(self.model_fixed_point_path)
-        if os.path.exists(self.model_float_path):
-            os.remove(self.model_float_path)
-        if os.path.exists(self.fixed_point_model_no_output_info_path):
-            os.remove(self.fixed_point_model_no_output_info_path)
 
     def test_quantize_linear_fixed_point_inference(self):
         """
         Run inference on QuantizeLinearFixedPoint and validate output.
         """
         # fixed point model
+        model_fixed_point = self._create_model_fixed_point()
         so = ort.SessionOptions()
-        sess = ort.InferenceSession(self.model_fixed_point_path, so, providers=["CPUExecutionProvider"])
+        sess = ort.InferenceSession(model_fixed_point.SerializeToString(), so, providers=["CPUExecutionProvider"])
         input_data_fixed_point = (self.input_data * (2**self.input_data_frac_bits)).astype(np.int32)
         output_fixed_point = sess.run(None, {"input": input_data_fixed_point})[0]
 
         # floating point model
-        self.create_model_float(self.model_float_path)
-        sess = ort.InferenceSession(self.model_float_path, so, providers=["CPUExecutionProvider"])
+        model_float = self._create_model_float()
+        sess = ort.InferenceSession(model_float.SerializeToString(), so, providers=["CPUExecutionProvider"])
         output_float = sess.run(None, {"input": self.input_data})[0]
 
         # Check output shape & values
@@ -179,8 +160,7 @@ class TestQuantizeLinearFixedPoint(unittest.TestCase):
         np.testing.assert_array_equal(output_fixed_point, output_float , err_msg="Quantized output mismatch!")
 
     def test_shape_inference(self):
-        self.fixed_point_model_no_output_info_path = "quantize_linear_fixed_point_test_no_output_info.onnx"
-        model = self.create_model_fixed_point(model_path=self.fixed_point_model_no_output_info_path, output_info_defined=False)
+        model = self._create_model_fixed_point(output_info_defined=False)
 
         inferred_model = SymbolicShapeInference.infer_shapes(model, auto_merge=True)
 
@@ -190,25 +170,19 @@ class TestQuantizeLinearFixedPoint(unittest.TestCase):
 
         _check_shapes(model.graph, inferred_model.graph, expected_shapes)
 
-
 class TestDequantizeLinearFixedPoint(unittest.TestCase):
     def setUp(self):
         """
         Create an ONNX model with a single DequantizeLinearFixedPoint node.
         """
-        self.model_fixed_point_path = "dequantize_linear_fixed_point_test.onnx"
-        self.model_float_path = "dequantize_linear_float_test.onnx"
         self.input_output_shape = [1, 1, 2, 3]
         self.scale_value = 0.10242629051208496
         self.zero_point_value = 5
         self.input_data = np.array([-128, 1, 2, 3, 4, 127], dtype=np.int8).reshape(self.input_output_shape)
-
         self.output_frac_bits = 27
 
-        self.create_model_fixed_point(self.model_fixed_point_path)
-        self.create_model_float(self.model_float_path)
 
-    def create_model_fixed_point(self, model_path, output_info_defined=True):
+    def _create_model_fixed_point(self, output_info_defined=True):
         # Create input & output tensors
         input_tensor = helper.make_tensor_value_info("input", TensorProto.INT8, self.input_output_shape)
 
@@ -249,10 +223,9 @@ class TestDequantizeLinearFixedPoint(unittest.TestCase):
             ir_version=7
         )
 
+        return onnx_model
 
-        # Save model
-        onnx.save(onnx_model, model_path)
-    def create_model_float(self, model_path):
+    def _create_model_float(self):
         # Create input & output tensors
         input_tensor = helper.make_tensor_value_info("input", TensorProto.INT8, self.input_output_shape)
         output_tensor = helper.make_tensor_value_info("output", TensorProto.FLOAT, self.input_output_shape)
@@ -288,36 +261,23 @@ class TestDequantizeLinearFixedPoint(unittest.TestCase):
             ir_version=7
         )
 
-
-        # Save model
-        onnx.save(onnx_model, model_path)
-
-    def tearDown(self):
-        """
-        Remove the generated ONNX file after tests.
-        """
-        if os.path.exists(self.model_fixed_point_path):
-            os.remove(self.model_fixed_point_path)
-
-        if os.path.exists(self.model_float_path):
-            os.remove(self.model_float_path)
-
-        if os.path.exists(self.fixed_point_model_no_output_info_path):
-            os.remove(self.fixed_point_model_no_output_info_path)
+        return onnx_model
 
     def test_dequantize_linear_fixed_point_inference(self):
         """
         Run inference on DequantizeLinearFixedPoint and validate output.
         """
         # Fixed-point dequantization
+        model_fixed = self._create_model_fixed_point()
         so = ort.SessionOptions()
-        sess = ort.InferenceSession(self.model_fixed_point_path, so, providers=["CPUExecutionProvider"])
+        sess = ort.InferenceSession(model_fixed.SerializeToString(), so, providers=["CPUExecutionProvider"])
         output_fixed_point_int32 = sess.run(None, {"input": self.input_data})[0]
         output_fixed_point_as_float = output_fixed_point_int32.astype(np.float32) * 2.**-self.output_frac_bits # convert to float
 
         # Floating-point dequantization
         so = ort.SessionOptions()
-        sess = ort.InferenceSession(self.model_float_path, so, providers=["CPUExecutionProvider"])
+        model_float = self._create_model_float()
+        sess = ort.InferenceSession(model_float.SerializeToString(), so, providers=["CPUExecutionProvider"])
         output_float = sess.run(None, {"input": self.input_data})[0]
 
         # Check output shape & values
@@ -328,13 +288,12 @@ class TestDequantizeLinearFixedPoint(unittest.TestCase):
         self.assertLessEqual(max_diff, atol, f"Max diff between fixed-point and float dequantized output: {max_diff}")
 
     def test_shape_inference(self):
-        self.fixed_point_model_no_output_info_path = "dequantize_linear_fixed_point_test_no_output_info.onnx"
-        model = self.create_model_fixed_point(model_path=self.fixed_point_model_no_output_info_path, output_info_defined=False)
+        model = self._create_model_fixed_point(output_info_defined=False)
 
         inferred_model = SymbolicShapeInference.infer_shapes(model, auto_merge=True)
 
         expected_shapes = [
-            helper.make_tensor_value_info("output", TensorProto.INT8, self.input_output_shape),
+            helper.make_tensor_value_info("output", TensorProto.INT32, self.input_output_shape),
         ]
 
         _check_shapes(model.graph, inferred_model.graph, expected_shapes)
