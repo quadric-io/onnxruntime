@@ -14,7 +14,6 @@ import sys
 import time
 import glob
 from onnx import version_converter
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 
 N, C, H, W = 1, 2048, 7, 7
