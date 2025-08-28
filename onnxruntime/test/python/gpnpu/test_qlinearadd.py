@@ -13,10 +13,9 @@ import os
 import sys
 import glob
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-from helper import generate_normal_inputs
-from helper_onnx import get_onnx_const
+# allows imports from directory of file
+sys.path.append(os.path.abspath(os.path.dirname(__file__)))
+from utils import generate_normal_inputs, get_onnx_const
 
 batch_size = 1
 h=16
