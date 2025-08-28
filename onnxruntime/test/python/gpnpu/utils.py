@@ -16,6 +16,7 @@ if os.path.exists(
         os.path.dirname(__file__),
         "..",
         "..",
+        "..",
         "python",
         "tools",
         "symbolic_shape_infer.py",
@@ -23,7 +24,7 @@ if os.path.exists(
 ):
     # Development: import from source tree
     import sys
-    sys.path.append(os.path.join(os.path.dirname(__file__), "..", "..", "python", "tools"))
+    sys.path.append(os.path.join(os.path.dirname(__file__), "..", "..", "..", "python", "tools"))
     from symbolic_shape_infer import SymbolicShapeInference
 else:
     # Production: import from installed package
