@@ -13,11 +13,9 @@ import os
 import sys
 import time
 import glob
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-from helper_onnx import get_onnx_const
-from helper import generate_normal_inputs
+# allows imports from directory of file
+sys.path.append(os.path.abspath(os.path.dirname(__file__)))
+from utils import generate_normal_inputs, get_onnx_const
 
 m = 1
 k = 2024
