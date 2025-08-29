@@ -132,8 +132,9 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
+        repository: quadric-io/onnxruntime
         fetch-depth: 0
-        ref: ${{ inputs.onnxruntime_branch || github.ref }}
+        ref: ${{ inputs.onnxruntime_branch || 'main' }}
 
     - name: Download all wheel artifacts
       uses: actions/download-artifact@v4
@@ -143,11 +144,12 @@ jobs:
     - name: Get current commit info
       id: commit_info
       run: |
-        commit_sha=${{ github.sha }}
+        # Get the actual commit we checked out, not github.sha
+        commit_sha=$(git rev-parse HEAD)
         echo "commit_sha=$commit_sha" >> $GITHUB_OUTPUT
-        short_sha=$(git rev-parse --short $commit_sha)
+        short_sha=$(git rev-parse --short HEAD)
         echo "short_sha=$short_sha" >> $GITHUB_OUTPUT
-        commit_message=$(git log -1 --pretty=format:"%s" $commit_sha)
+        commit_message=$(git log -1 --pretty=format:"%s" HEAD)
         echo "commit_message=$commit_message" >> $GITHUB_OUTPUT
 
     - name: Delete existing stable release
