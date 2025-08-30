@@ -13,15 +13,19 @@ import math
 # These helper functions are assumed to be defined in testing_common.py
 # and `out_fbits`, `wt_frac_bits`, `bias_frc_bits` are constants
 # from that module.
-from testing_common import (
+from utils import (
     apply_float_casting,
     apply_fixed_point_casting,
+    check_shape_inference,
 )
 
 # The parameters for this test are directly ported from sdk, but this test runs for both width and channelwise layernorm.
 out_fbits = 29
 wt_frac_bits = 30
 bias_frc_bits = 31
+
+sys.path.append(os.path.abspath(os.path.dirname(__file__)))
+from utils import check_shape_inference
 
 
 class TestLayernormFixedPoint(unittest.TestCase):
@@ -44,18 +48,22 @@ class TestLayernormFixedPoint(unittest.TestCase):
 
     def _create_model_fixed_point(
         self,
-        model_path,
         input_shape,
         inp_fbits,
         axis,
         scale,
         bias,
+        model_path=None,
+        output_info_defined=True,
     ):
         """
         Creates an ONNX model with a single LayernormFixedPoint node.
         """
         input_tensor = helper.make_tensor_value_info("x", TensorProto.INT32, input_shape)
-        output_tensor = helper.make_tensor_value_info("output", TensorProto.INT32, input_shape)
+        if output_info_defined:
+            output_tensor = helper.make_tensor_value_info("output", TensorProto.INT32, input_shape)
+        else:
+            output_tensor = helper.make_tensor_value_info("output", TensorProto.UNDEFINED, None)
 
         inp_fbits_tensor = helper.make_tensor(name="x_frac_bits", data_type=TensorProto.INT8, dims=[], vals=[inp_fbits])
         scale_tensor = helper.make_tensor(
@@ -94,9 +102,11 @@ class TestLayernormFixedPoint(unittest.TestCase):
 
         onnx_model = helper.make_model(
             graph,
-            opset_imports=[helper.make_operatorsetid("com.quadric", 1)],
+            opset_imports=[helper.make_operatorsetid("", 13), helper.make_operatorsetid("com.quadric", 1)],
         )
-        onnx.save(onnx_model, model_path)
+        if model_path:
+            onnx.save(onnx_model, model_path)
+        return onnx_model
 
     def _calculate_expected_output(self, np_input, axis, scale_tensor, bias_tensor):
         """
@@ -159,7 +169,7 @@ class TestLayernormFixedPoint(unittest.TestCase):
         scale_tensor = np.random.uniform(0.5, 0.7, size=input_shape[axis]).astype(np.float32)
         bias_tensor = np.random.uniform(-0.01, 0.01, size=input_shape[axis]).astype(np.float32)
 
-        self._create_model_fixed_point(model_path, input_shape, in_frac_bits, axis, scale_tensor, bias_tensor)
+        self._create_model_fixed_point(input_shape, in_frac_bits, axis, scale_tensor, bias_tensor, model_path)
 
         np_input = apply_float_casting(in_tensor_fxp, in_frac_bits)
 
@@ -199,6 +209,19 @@ class TestLayernormFixedPoint(unittest.TestCase):
             for params in param_combinations:
                 with self.subTest(params=params):
                     self._run_test_case(*params)
+
+    def test_shape_inference(self):
+        # Test shape inference, testing for one input/output shape should be sufficient.
+        inp_shape, in_frac_bits, axis = [1, 197, 32], 16, -1
+        scale_tensor = np.random.uniform(0.5, 0.7, size=inp_shape[axis]).astype(np.float32)
+        bias_tensor = np.random.uniform(-0.01, 0.01, size=inp_shape[axis]).astype(np.float32)
+        onnx_model = self._create_model_fixed_point(
+            inp_shape, in_frac_bits, axis, scale_tensor, bias_tensor, output_info_defined=False
+        )
+        expected_shapes = [
+            helper.make_tensor_value_info("output", TensorProto.INT32, inp_shape),
+        ]
+        check_shape_inference(onnx_model, expected_shapes)
 
 
 if __name__ == "__main__":
