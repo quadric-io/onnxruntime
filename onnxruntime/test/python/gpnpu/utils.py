@@ -1,4 +1,3 @@
-
 import os
 import numpy as np
 import onnx
@@ -24,14 +23,17 @@ if os.path.exists(
 ):
     # Development: import from source tree
     import sys
+
     sys.path.append(os.path.join(os.path.dirname(__file__), "..", "..", "..", "python", "tools"))
     from symbolic_shape_infer import SymbolicShapeInference
 else:
     # Production: import from installed package
     from onnxruntime.tools.symbolic_shape_infer import SymbolicShapeInference
 
+
 def generate_normal_inputs(shape, dtype, mu=0, sigma=32, a_min=-127, a_max=127):
     return np.clip(np.rint(np.random.normal(mu, sigma, shape)).astype(dtype), a_min, a_max)
+
 
 def get_onnx_const(name, val, dtype=None):
     if isinstance(val, np.ndarray):
@@ -74,3 +76,11 @@ def check_shape_inference(model, vis):  # type: (ModelProto, List[ValueInfoProto
     for vi, inferred_vi in zip(vis, inferred_vis):
         assert vi == inferred_vi, f"\n{vi}\n{inferred_vi}\n"
     raise AssertionError()
+
+
+def apply_fixed_point_casting(float_tensor, frac_bits, np_dtype=np.int32):
+    return (float_tensor * (1 << frac_bits)).astype(np_dtype)
+
+
+def apply_float_casting(tensor, frac_bits):
+    return (tensor / (1 << int(frac_bits))).astype(np.float64)
