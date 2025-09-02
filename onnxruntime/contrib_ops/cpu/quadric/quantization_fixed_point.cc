@@ -5,6 +5,7 @@
 #include <iostream>
 #include <iomanip>  // For std::setprecision
 #include "core/mlas/inc/mlas.h"
+#include "fixed_point.h"
 
 namespace onnxruntime {
 namespace contrib {
@@ -30,12 +31,6 @@ ONNX_OPERATOR_KERNEL_EX(
         .TypeConstraint("T3", DataTypeImpl::GetTensorType<int8_t>())    // Zero-point
         .TypeConstraint("T4", DataTypeImpl::GetTensorType<int32_t>()),  // Output
     DequantizeLinearFixedPoint);
-
-// Fixed-point multiplication with provided shift
-int32_t fixedPointMultiply(int32_t a, int32_t b, int shift) {
-  int64_t product = static_cast<int64_t>(a) * static_cast<int64_t>(b);
-  return (shift > 0) ? (product >> shift) : (product << -shift);
-}
 
 Status DequantizeLinearFixedPoint::Compute(OpKernelContext* ctx) const {
   // Retrieve input tensors
@@ -70,7 +65,7 @@ Status DequantizeLinearFixedPoint::Compute(OpKernelContext* ctx) const {
   size_t tensorSize = X->Shape().Size();
 
   for (size_t i = 0; i < tensorSize; ++i) {
-    yData[i] = fixedPointMultiply(xData[i] - zp, scaleQfp, shift);
+    yData[i] = chimera::fixedPointMultiply(xData[i] - zp, scaleQfp, shift);
   }
 
   return Status::OK();
@@ -136,7 +131,7 @@ Status QuantizeLinearFixedPoint::Compute(OpKernelContext* ctx) const {
   int8_t* yData = Y->MutableData<int8_t>();
   size_t tensor_size = X->Shape().Size();
   for (size_t i = 0; i < tensor_size; ++i) {
-    int32_t product = fixedPointMultiply(x_data[i], scaleInvQfp, shift);
+    int32_t product = chimera::fixedPointMultiply(x_data[i], scaleInvQfp, shift);
     int32_t productRound = fxRoundPosInf(static_cast<int32_t>(product), static_cast<uint8_t>(resultFracBits));
 
     // Clip and apply zero-point
