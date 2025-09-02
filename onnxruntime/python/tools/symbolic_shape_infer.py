@@ -242,6 +242,7 @@ class SymbolicShapeInference:
             "QuadricCustomOp": self._infer_custom_op,
             "QuantizeLinearFixedPoint": self._infer_QuantizeLinearFixedPoint,
             "DequantizeLinearFixedPoint": self._infer_DequantizeLinearFixedPoint,
+            "LayernormFixedPoint": self._infer_LayernormFixedPoint,
         }
         self.aten_op_dispatcher_ = {
             "embedding": self._infer_Gather,
@@ -975,16 +976,12 @@ class SymbolicShapeInference:
             vi = self.known_vi_.get(output_name)
             if vi is None:
                 vi = helper.make_tensor_value_info(
-                    name=output_name,
-                    elem_type=onnx.TensorProto.FLOAT,
-                    shape=[None, None]
+                    name=output_name, elem_type=onnx.TensorProto.FLOAT, shape=[None, None]
                 )
                 self.known_vi_[output_name] = vi
             elif not vi.type.HasField("tensor_type"):
                 vi_with_type = helper.make_tensor_value_info(
-                    name=output_name,
-                    elem_type=onnx.TensorProto.FLOAT,
-                    shape=[None, None]
+                    name=output_name, elem_type=onnx.TensorProto.FLOAT, shape=[None, None]
                 )
                 vi.type.CopyFrom(vi_with_type.type)
 
@@ -1064,11 +1061,7 @@ class SymbolicShapeInference:
 
         # Create the output value info and assign it to the known value info
         vi = self.known_vi_[output_name]
-        vi.CopyFrom(helper.make_tensor_value_info(
-            output_name,
-            onnx.TensorProto.INT8,
-            input_shape
-        ))
+        vi.CopyFrom(helper.make_tensor_value_info(output_name, onnx.TensorProto.INT8, input_shape))
 
     def _infer_DequantizeLinearFixedPoint(self, node):
         """Copy shape from input[0] to output[0], and set type to INT32"""
@@ -1084,11 +1077,23 @@ class SymbolicShapeInference:
 
         # Create the output value info and assign it to the known value info
         vi = self.known_vi_[output_name]
-        vi.CopyFrom(helper.make_tensor_value_info(
-            output_name,
-            onnx.TensorProto.INT32,
-            input_shape
-        ))
+        vi.CopyFrom(helper.make_tensor_value_info(output_name, onnx.TensorProto.INT32, input_shape))
+
+    def _infer_LayernormFixedPoint(self, node):
+        """Copy shape from input[0] to output[0], and set type to INT32"""
+        output_name = node.output[0]
+        input_name = node.input[0]
+
+        if input_name not in self.known_vi_:
+            return
+
+        input_shape = self._get_shape(node, 0)
+        if input_shape is None:
+            return
+
+        # Create the output value info and assign it to the known value info
+        vi = self.known_vi_[output_name]
+        vi.CopyFrom(helper.make_tensor_value_info(output_name, onnx.TensorProto.INT32, input_shape))
 
     def _infer_ConcatFromSequence(self, node):
         seq_shape = self._get_shape(node, 0)
