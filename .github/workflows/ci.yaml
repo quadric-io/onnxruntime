@@ -1,0 +1,183 @@
+name: CI
+
+concurrency:
+  group: onnxruntime-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+on:
+  workflow_call:
+    inputs:
+      is_experimental:
+        description: "Create an experimental build (use latest constants)"
+        type: boolean
+        default: false
+      onnxruntime_branch:
+        type: string
+        default: "main"
+      compiler_version:
+        default: "stable"
+        type: string
+      constants_version:
+        default: "stable"
+        type: string
+  workflow_dispatch:
+    inputs:
+      is_experimental:
+        description: "Create an experimental build (use latest constants)"
+        type: boolean
+        default: false
+      onnxruntime_branch:
+        type: string
+        default: "main"
+      compiler_version:
+        description: "compiler_version: stable, experimental or latest (unused by ONNX Runtime)"
+        default: "stable"
+        type: string
+      constants_version:
+        description: "constants_version: stable, latest or a branch name (unused by ONNX Runtime)"
+        default: "stable"
+        type: string
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+env:
+  GH_PAT: ${{ secrets.GH_PAT }}
+
+jobs:
+  build_and_upload_wheel_linux:
+    runs-on: The_CTOs_Choice
+    container:
+      image: ghcr.io/quadric-io/tvm:devel
+      options: "--mount type=bind,source=${{ github.workspace }},target=/workspace"
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        repository: quadric-io/onnxruntime
+        ref: ${{ inputs.onnxruntime_branch || github.ref }}
+        token: ${{ secrets.GH_PAT }}
+
+    - name: Fetch sha
+      id: fetch_sha
+      run: |
+        # Fetch current sha for the potential creation of an experimental release
+        CURRENT_SHA=$(git rev-parse HEAD)
+        echo "current_sha=$CURRENT_SHA" >> $GITHUB_OUTPUT
+
+    - name: Build ONNX Runtime wheel
+      working-directory: /workspace
+      run: |
+        python3 -m pip install "cmake<4"
+
+        # Always run tests - no skipping for any scenario
+        test_args=""
+
+        ./build.sh --build_wheel --config Release --parallel $test_args --skip_submodule_sync --allow_running_as_root --compile_no_warning_as_error
+
+        wheel_path=$(find . -name '*.whl' | xargs readlink -f)
+        echo "wheel_path=$wheel_path" >> $GITHUB_ENV
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ort-wheel-linux
+        path: ${{ env.wheel_path }}
+
+  build_and_upload_wheel_mac:
+    if: github.repository != 'quadric-io/sdk-cli'
+    runs-on: [self-hosted, macOS, ARM64]
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        repository: quadric-io/onnxruntime
+        ref: ${{ inputs.onnxruntime_branch || github.ref }}
+        token: ${{ secrets.GH_PAT }}
+
+    - name: Fetch sha
+      id: fetch_sha
+      run: |
+        # Fetch current sha for the potential creation of an experimental release
+        CURRENT_SHA=$(git rev-parse HEAD)
+        echo "current_sha=$CURRENT_SHA" >> $GITHUB_OUTPUT
+
+    - name: Install python dependencies
+      run: |
+        python3 -m pip install -r requirements.txt
+        python3 -m pip install -r requirements-quadric.txt
+
+    - name: Build ONNX Runtime wheel
+      run: |
+        # Always run tests - no skipping for any scenario
+        test_args=""
+
+        ./build.sh --build_wheel --config Release --parallel $test_args --skip_submodule_sync --compile_no_warning_as_error --skip_submodule_sync --apple_deploy_target 12
+
+        wheel_path=$(find . -name '*.whl' | xargs readlink -f)
+        echo "wheel_path=$wheel_path" >> $GITHUB_ENV
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ort-wheel-mac
+        path: ${{ env.wheel_path }}
+
+  # Keep your existing release logic for main branch pushes
+  create_release:
+    permissions:
+      contents: write
+    # Only create releases on main branch pushes (not when called from tagger)
+    if: (github.ref == 'refs/heads/main') && (github.event_name == 'push')
+    needs: [build_and_upload_wheel_mac, build_and_upload_wheel_linux]
+    runs-on: ubuntu-latest
+    steps:
+    - name: Download ort-wheel-linux artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: ort-wheel-linux
+        path: artifacts/
+
+    - name: Download ort-wheel-mac artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: ort-wheel-mac
+        path: artifacts/
+
+    - name: Get next release tag
+      id: get_tag
+      env:
+        GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+      run: |
+        latest_tag=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
+          https://api.github.com/repos/${{ github.repository }}/releases \
+          | jq -r '.[].tag_name' \
+          | grep -E '^v[0-9]+$' \
+          | sort -V \
+          | tail -n1)
+
+        echo "Latest tag: $latest_tag"
+
+        if [ -z "$latest_tag" ]; then
+          echo "❌ Error: No previous tags found matching 'v<number>' format. Cannot compute next tag."
+          exit 1
+        fi
+
+        next_num=$(( ${latest_tag#v} + 1 ))
+        next_tag="v$next_num"
+
+        echo "next_tag=$next_tag" >> $GITHUB_ENV
+        echo "next_tag=$next_tag" >> $GITHUB_OUTPUT
+
+    - name: Create Release and Upload Both Assets
+      uses: softprops/action-gh-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+      with:
+        tag_name: ${{ steps.get_tag.outputs.next_tag }}
+        name: Release ${{ steps.get_tag.outputs.next_tag }}
+        files: |
+          artifacts/*.whl
