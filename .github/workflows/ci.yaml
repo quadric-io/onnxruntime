@@ -1,8 +1,4 @@
-name: CI
-
-concurrency:
-  group: onnxruntime-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+name: CI && Release & Upload Wheel
 
 on:
   workflow_call:
@@ -16,10 +12,6 @@ on:
         default: "main"
   workflow_dispatch:
     inputs:
-      is_experimental:
-        description: "Create an experimental build"
-        type: boolean
-        default: false
       onnxruntime_branch:
         type: string
         default: "main"
@@ -29,9 +21,6 @@ on:
   pull_request:
     branches:
       - main
-
-env:
-  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
   build_and_upload_wheel_linux:
@@ -45,7 +34,6 @@ jobs:
       with:
         repository: quadric-io/onnxruntime
         ref: ${{ inputs.onnxruntime_branch || github.ref }}
-        token: ${{ secrets.GH_PAT }}
 
     - name: Fetch sha
       id: fetch_sha
@@ -58,11 +46,7 @@ jobs:
       working-directory: /workspace
       run: |
         python3 -m pip install "cmake<4"
-
-        # Always run tests - no skipping for any scenario
-        test_args=""
-
-        ./build.sh --build_wheel --config Release --parallel $test_args --skip_submodule_sync --allow_running_as_root --compile_no_warning_as_error
+        ./build.sh --build_wheel --config Release --parallel --skip_submodule_sync --allow_running_as_root --compile_no_warning_as_error
 
         wheel_path=$(find . -name '*.whl' | xargs readlink -f)
         echo "wheel_path=$wheel_path" >> $GITHUB_ENV
@@ -82,7 +66,6 @@ jobs:
       with:
         repository: quadric-io/onnxruntime
         ref: ${{ inputs.onnxruntime_branch || github.ref }}
-        token: ${{ secrets.GH_PAT }}
 
     - name: Fetch sha
       id: fetch_sha
@@ -98,10 +81,7 @@ jobs:
 
     - name: Build ONNX Runtime wheel
       run: |
-        # Always run tests - no skipping for any scenario
-        test_args=""
-
-        ./build.sh --build_wheel --config Release --parallel $test_args --skip_submodule_sync --compile_no_warning_as_error --skip_submodule_sync --apple_deploy_target 12
+        ./build.sh --build_wheel --config Release --parallel --skip_submodule_sync --compile_no_warning_as_error --skip_submodule_sync --apple_deploy_target 12
 
         wheel_path=$(find . -name '*.whl' | xargs readlink -f)
         echo "wheel_path=$wheel_path" >> $GITHUB_ENV
