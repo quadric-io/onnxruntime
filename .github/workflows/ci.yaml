@@ -8,35 +8,21 @@ on:
   workflow_call:
     inputs:
       is_experimental:
-        description: "Create an experimental build (use latest constants)"
+        description: "Create an experimental build"
         type: boolean
         default: false
       onnxruntime_branch:
         type: string
         default: "main"
-      compiler_version:
-        default: "stable"
-        type: string
-      constants_version:
-        default: "stable"
-        type: string
   workflow_dispatch:
     inputs:
       is_experimental:
-        description: "Create an experimental build (use latest constants)"
+        description: "Create an experimental build"
         type: boolean
         default: false
       onnxruntime_branch:
         type: string
         default: "main"
-      compiler_version:
-        description: "compiler_version: stable, experimental or latest (unused by ONNX Runtime)"
-        default: "stable"
-        type: string
-      constants_version:
-        description: "constants_version: stable, latest or a branch name (unused by ONNX Runtime)"
-        default: "stable"
-        type: string
   push:
     branches:
       - main
@@ -45,7 +31,7 @@ on:
       - main
 
 env:
-  GH_PAT: ${{ secrets.GH_PAT }}
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
   build_and_upload_wheel_linux:
@@ -150,7 +136,7 @@ jobs:
     - name: Get next release tag
       id: get_tag
       env:
-        GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         latest_tag=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
           https://api.github.com/repos/${{ github.repository }}/releases \
@@ -175,7 +161,7 @@ jobs:
     - name: Create Release and Upload Both Assets
       uses: softprops/action-gh-release@v1
       env:
-        GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         tag_name: ${{ steps.get_tag.outputs.next_tag }}
         name: Release ${{ steps.get_tag.outputs.next_tag }}
