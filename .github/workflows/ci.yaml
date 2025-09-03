@@ -1,4 +1,8 @@
-name: CI && Release & Upload Wheel
+name: CI
+
+concurrency:
+  group: onnxruntime-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 on:
   workflow_call:
@@ -12,6 +16,10 @@ on:
         default: "main"
   workflow_dispatch:
     inputs:
+      is_experimental:
+        description: "Create an experimental build"
+        type: boolean
+        default: false
       onnxruntime_branch:
         type: string
         default: "main"
@@ -92,11 +100,10 @@ jobs:
         name: ort-wheel-mac
         path: ${{ env.wheel_path }}
 
-  # Keep your existing release logic for main branch pushes
+  # Create versioned releases on main branch pushes
   create_release:
     permissions:
       contents: write
-    # Only create releases on main branch pushes (not when called from tagger)
     if: (github.ref == 'refs/heads/main') && (github.event_name == 'push')
     needs: [build_and_upload_wheel_mac, build_and_upload_wheel_linux]
     runs-on: ubuntu-latest
