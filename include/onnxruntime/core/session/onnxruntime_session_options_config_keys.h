@@ -289,3 +289,6 @@ static const char* const kOrtSessionOptionsQDQMatMulNBitsAccuracyLevel = "sessio
 // “Default”: OS determines the scheduling priority and processor performance to service this workload. [Default]
 // “Efficient”: OS treats this workload is efficiency oriented with low scheduling priority and efficient processor performance.
 static const char* const kOrtEpDynamicOptionsWorkloadType = "ep.dynamic.workload_type";
+
+// GPNPU mode
+static const char* const kOrtSessionOptionsGpnpuMode = "session.enable_gpnpu";

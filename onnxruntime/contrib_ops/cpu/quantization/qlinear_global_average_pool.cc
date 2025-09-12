@@ -9,7 +9,6 @@
 #include "core/util/math.h"
 #include "core/mlas/inc/mlas.h"
 #include <functional>
-#include "core/framework/op_kernel_context_internal.h"
 
 using onnxruntime::concurrency::ThreadPool;
 
@@ -130,14 +129,6 @@ Status QLinearGlobalAveragePool::Compute(OpKernelContext* context) const {
 
   auto dtype = X.GetElementType();
 
-  auto* internal_context = dynamic_cast<OpKernelContextInternal*>(context);
-  if (!internal_context) {
-      return Status(common::ONNXRUNTIME, common::FAIL, "Failed to cast OpKernelContext to OpKernelContextInternal");
-  }
-  const auto& session_options = internal_context->GetSessionState().GetSessionOptions();
-
-  const bool gpnpu_flag = session_options.enable_gpnpu;
-
   if (dtype == ONNX_NAMESPACE::TensorProto_DataType_UINT8) {
     return ComputeQLinearGlobalAvgPool(X.Data<uint8_t>(), x_scale, *(tensor_x_zero_point->Data<uint8_t>()),
                                        Y.MutableData<uint8_t>(), y_scale, *(tensor_y_zero_point->Data<uint8_t>()),
@@ -145,7 +136,7 @@ Status QLinearGlobalAveragePool::Compute(OpKernelContext* context) const {
   } else {
     return ComputeQLinearGlobalAvgPool(X.Data<int8_t>(), x_scale, *(tensor_x_zero_point->Data<int8_t>()),
                                        Y.MutableData<int8_t>(), y_scale, *(tensor_y_zero_point->Data<int8_t>()),
-                                       N, C, image_size, channels_last_, tp, gpnpu_flag);
+                                       N, C, image_size, channels_last_, tp, gpnpu_flag_);
   }
 }
 

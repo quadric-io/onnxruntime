@@ -1655,13 +1655,6 @@ void addObjectMethods(py::module& m, ExecutionProviderRegistrationFn ep_registra
           R"pbdoc(Enables the memory arena on CPU. Arena may pre-allocate memory for future usage.
 Set this option to false if you don't want it. Default is True.)pbdoc")
       .def_property(
-          "enable_gpnpu",
-          [](const PySessionOptions* options) -> bool { return options->value.enable_gpnpu; },
-          [](PySessionOptions* options, bool enable_gpnpu) -> void {
-            options->value.enable_gpnpu = enable_gpnpu;
-          },
-          R"pbdoc(Enable GPNPU mode. Default is false.)pbdoc")
-      .def_property(
           "enable_profiling",
           [](const PySessionOptions* options) -> bool { return options->value.enable_profiling; },
           [](PySessionOptions* options, bool enable_profiling) -> void {

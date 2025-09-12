@@ -10,7 +10,7 @@
 #include "core/util/math_cpuonly.h"
 #include "core/util/qmath.h"
 #include "core/mlas/inc/mlas.h"
-#include "core/framework/op_kernel_context_internal.h"
+#include "core/session/onnxruntime_session_options_config_keys.h"
 
 namespace onnxruntime {
 
@@ -21,6 +21,8 @@ class QLinearConv : public OpKernel {
  public:
   explicit QLinearConv(const OpKernelInfo& info) : OpKernel(info), conv_attrs_(info) {
     channels_last_ = (info.GetAttrOrDefault<int64_t>("channels_last", static_cast<int64_t>(0)) != 0);
+
+    gpnpu_flag_ = (info.GetConfigOptions().GetConfigOrDefault(kOrtSessionOptionsGpnpuMode, "0") == "1");
   }
 
   Status Compute(OpKernelContext* context) const override;
@@ -175,6 +177,11 @@ class QLinearConv : public OpKernel {
                          size_t group_input_channels,
                          size_t group_output_channels,
                          size_t kernel_size) {
+
+    // Disabling symmetric conv optimizations in gpnpu mode since fixed point arithmetic changes have not been
+    // implemented for these optimization passes.
+    if (gpnpu_flag_) return false;
+
     const Tensor* X_zero_point = nullptr;
     const Tensor* W_zero_point = nullptr;
 
@@ -301,6 +308,7 @@ class QLinearConv : public OpKernel {
   bool is_symmetric_gemm_{false};
   bool channels_last_{false};
   std::vector<int32_t> column_sums_;
+  bool gpnpu_flag_{false};
 };
 
 // uint8_t kernel supports weight being either uint8_t or int8_t
@@ -514,15 +522,6 @@ Status QLinearConv<ActType>::UseSharedPrePackedBuffers(std::vector<BufferUniqueP
 
 template <typename ActType>
 Status QLinearConv<ActType>::Compute(OpKernelContext* context) const {
-  // Cast to internal type because we want to access session_options parameter
-  auto* internal_context = dynamic_cast<OpKernelContextInternal*>(context);
-  if (!internal_context) {
-      return Status(common::ONNXRUNTIME, common::FAIL, "Failed to cast OpKernelContext to OpKernelContextInternal");
-  }
-  const auto& session_options = internal_context->GetSessionState().GetSessionOptions();
-  // Test to see if we have access to enable_gpnpu flag
-  const bool gpnpu_flag = session_options.enable_gpnpu;
-
   const Tensor* X = context->Input<Tensor>(InputTensors::IN_X);
   const Tensor* W = is_W_packed_ ? nullptr : context->Input<Tensor>(InputTensors::IN_W);
   const auto& W_shape = W ? W->Shape() : W_shape_;
@@ -983,7 +982,7 @@ Status QLinearConv<ActType>::Compute(OpKernelContext* context) const {
           }
         }
       }
-      if (gpnpu_flag) {
+      if (gpnpu_flag_) {
         // New MlasRequantizeOuput but for fixed point not floating point
         MlasRequantizeOutputFixedPoint(
           worker_gemm_output,
