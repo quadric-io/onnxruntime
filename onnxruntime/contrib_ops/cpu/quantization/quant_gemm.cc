@@ -18,16 +18,10 @@ namespace contrib {
 class QGemm : protected GemmBase, public MatMulIntegerBase {
  public:
   QGemm(const OpKernelInfo& info) : GemmBase(info), MatMulIntegerBase(info) {
+    gpnpu_flag_ = (info.GetConfigOptions().GetConfigOrDefault(kOrtSessionOptionsGpnpuMode, "0") == "1");
   }
 
   Status Compute(OpKernelContext* context) const override {
-    auto* internal_context = dynamic_cast<OpKernelContextInternal*>(context);
-    if (!internal_context) {
-        return Status(common::ONNXRUNTIME, common::FAIL, "Failed to cast OpKernelContext to OpKernelContextInternal");
-    }
-    const auto& session_options = internal_context->GetSessionState().GetSessionOptions();
-    const bool gpnpu_flag = session_options.enable_gpnpu;
-
     const auto* a = context->Input<Tensor>(IN_A);
     const auto* b = packed_b_ ? nullptr : context->Input<Tensor>(IN_B);
     const auto& b_shape = b ? b->Shape() : b_shape_;
@@ -121,7 +115,7 @@ class QGemm : protected GemmBase, public MatMulIntegerBase {
     std::optional<MLAS_QGEMM_REQUANT_OUTPUT_PROCESSOR> requant_proc_ptr;
     std::optional<MLAS_QGEMM_SCALE_BIAS_OUTPUT_PROCESSOR> scale_bias_proc_ptr;
 
-    if (gpnpu_flag) {
+    if (gpnpu_flag_) {
       SetPostProcessorFixedPoint(y_zp, N, output_scales, y, gemm_param, requant_proc_ptr_fixedpoint);
     } else {
       SetPostProcessor(y_zp, N, output_scales, y, gemm_param, scale_bias_proc_ptr, requant_proc_ptr);
@@ -141,6 +135,7 @@ class QGemm : protected GemmBase, public MatMulIntegerBase {
   }
 
  private:
+  gpnpu_flag_{false};
   enum InputTensors : int {
     IN_A = 0,
     IN_A_SCALE = 1,
@@ -253,6 +248,7 @@ class QGemm : protected GemmBase, public MatMulIntegerBase {
 
       gemm_param.OutputProcessor = &*requant_proc_ptr;
   }
+
 };
 
 ONNX_OPERATOR_TYPED_KERNEL_EX(
