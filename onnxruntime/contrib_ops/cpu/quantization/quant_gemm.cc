@@ -135,7 +135,7 @@ class QGemm : protected GemmBase, public MatMulIntegerBase {
   }
 
  private:
-  gpnpu_flag_{false};
+  bool gpnpu_flag_{false};
   enum InputTensors : int {
     IN_A = 0,
     IN_A_SCALE = 1,
