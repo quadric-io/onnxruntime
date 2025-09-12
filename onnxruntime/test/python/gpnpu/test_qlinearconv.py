@@ -291,15 +291,12 @@ class TestQLinearConv(unittest.TestCase):
     def test_qlinearconv_inference(self):
         # Run inference
         session_options_gpnpu = ort.SessionOptions()
-        session_options_gpnpu.enable_gpnpu = True
+        session_options_gpnpu.add_session_config_entry("session.enable_gpnpu", "1")
 
         # Create an inference session
         session_gpnpu = ort.InferenceSession(self.model_path, sess_options=session_options_gpnpu, providers=["CPUExecutionProvider"])
         session_options_cpu = ort.SessionOptions()
-        session_options_cpu.enable_gpnpu = False
         session_cpu = ort.InferenceSession(self.model_path, sess_options=session_options_cpu, providers=["CPUExecutionProvider"])
-        self.assertFalse(session_cpu.get_session_options().enable_gpnpu, "enable_gpnpu should be False for CPU session")
-        self.assertTrue(session_gpnpu.get_session_options().enable_gpnpu, "enable_gpnpu should be True for GPNPU session")
 
         # Inspect the model's input to get the name and shape
         inp_info = session_gpnpu.get_inputs()[0]

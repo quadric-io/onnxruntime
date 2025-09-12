@@ -5,6 +5,7 @@
 
 #include "core/common/common.h"
 #include "core/framework/op_kernel.h"
+#include "core/session/onnxruntime_session_options_config_keys.h"
 
 namespace onnxruntime {
 namespace contrib {
@@ -13,12 +14,14 @@ class QLinearGlobalAveragePool final : public OpKernel {
  public:
   QLinearGlobalAveragePool(const OpKernelInfo& info) : OpKernel(info) {
     channels_last_ = (info.GetAttrOrDefault<int64_t>("channels_last", static_cast<int64_t>(0)) != 0);
+    gpnpu_flag_ = (info.GetConfigOptions().GetConfigOrDefault(kOrtSessionOptionsGpnpuMode, "0") == "1");
   }
 
   Status Compute(OpKernelContext* context) const override;
 
  private:
   bool channels_last_;
+  bool gpnpu_flag_{false};
 };
 
 template <typename T8Bits>

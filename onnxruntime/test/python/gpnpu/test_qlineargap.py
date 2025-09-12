@@ -81,7 +81,6 @@ class TestQLinearGAP(unittest.TestCase):
         for _ in range(num_iterations):
             # CPU Session
             session_options_cpu = ort.SessionOptions()
-            session_options_cpu.enable_gpnpu = False
             session_cpu = ort.InferenceSession(
                 self.model_path,
                 sess_options=session_options_cpu,
@@ -90,7 +89,7 @@ class TestQLinearGAP(unittest.TestCase):
 
             # GPNPU Session
             session_options_gpnpu = ort.SessionOptions()
-            session_options_gpnpu.enable_gpnpu = True
+            session_options_gpnpu.add_session_config_entry("session.enable_gpnpu", "1")
             session_gpnpu = ort.InferenceSession(
                 self.model_path,
                 sess_options=session_options_gpnpu,
