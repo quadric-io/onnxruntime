@@ -15,8 +15,7 @@ template <typename T>
 class QLinearAdd final : public OpKernel {
  public:
   QLinearAdd(const OpKernelInfo& info) : OpKernel(info) {
-    auto gpnpu_flag_str = info.GetConfigOptions().GetConfigOrDefault(kOrtSessionOptionsGpnpuMode, "0");
-    gpnpu_flag_ = (gpnpu_flag_str == "1");
+  gpnpu_flag_ = (info.GetConfigOptions().GetConfigOrDefault(kOrtSessionOptionsGpnpuMode, "0") == "1");
   }
 
   Status Compute(OpKernelContext* context) const override;

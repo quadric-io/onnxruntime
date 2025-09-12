@@ -22,8 +22,8 @@ class QLinearConv : public OpKernel {
   explicit QLinearConv(const OpKernelInfo& info) : OpKernel(info), conv_attrs_(info) {
     channels_last_ = (info.GetAttrOrDefault<int64_t>("channels_last", static_cast<int64_t>(0)) != 0);
 
-    auto gpnpu_flag_str = info.GetConfigOptions().GetConfigOrDefault(kOrtSessionOptionsGpnpuMode, "0");
-    gpnpu_flag_ = (gpnpu_flag_str == "1");  }
+    gpnpu_flag_ = (info.GetConfigOptions().GetConfigOrDefault(kOrtSessionOptionsGpnpuMode, "0") == "1");
+  }
 
   Status Compute(OpKernelContext* context) const override;
 
@@ -982,7 +982,7 @@ Status QLinearConv<ActType>::Compute(OpKernelContext* context) const {
           }
         }
       }
-      if (gpnpu_flag) {
+      if (gpnpu_flag_) {
         // New MlasRequantizeOuput but for fixed point not floating point
         MlasRequantizeOutputFixedPoint(
           worker_gemm_output,
