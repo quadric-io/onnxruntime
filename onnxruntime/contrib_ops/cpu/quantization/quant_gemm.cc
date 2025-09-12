@@ -10,6 +10,7 @@
 #include "core/util/math_cpuonly.h"
 #include "core/util/qmath.h"
 #include "core/mlas/inc/mlas.h"
+#include "core/session/onnxruntime_session_options_config_keys.h"
 
 namespace onnxruntime {
 namespace contrib {
