@@ -296,7 +296,6 @@ class TestQLinearConv(unittest.TestCase):
         # Create an inference session
         session_gpnpu = ort.InferenceSession(self.model_path, sess_options=session_options_gpnpu, providers=["CPUExecutionProvider"])
         session_options_cpu = ort.SessionOptions()
-        session_options_cpu.enable_gpnpu = False
         session_cpu = ort.InferenceSession(self.model_path, sess_options=session_options_cpu, providers=["CPUExecutionProvider"])
 
         # Inspect the model's input to get the name and shape
