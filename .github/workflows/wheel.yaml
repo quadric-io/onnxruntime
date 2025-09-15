@@ -11,6 +11,10 @@ on:
       onnxruntime_branch:
         type: string
         default: "main"
+      promote_to_stable:
+        type: boolean
+        default: false
+        description: 'Promote this build to stable release'
   push:
     branches:
       - main
@@ -117,3 +121,73 @@ jobs:
         name: Release ${{ steps.get_tag.outputs.next_tag }}
         files: |
           artifacts/*.whl
+
+  promote_to_stable:
+    permissions:
+      contents: write
+    if: inputs.promote_to_stable == true
+    needs: [build_and_upload_wheel_mac, build_and_upload_wheel_linux]
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        repository: quadric-io/onnxruntime
+        fetch-depth: 0
+        ref: ${{ inputs.onnxruntime_branch || 'main' }}
+
+    - name: Download all wheel artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts/
+
+    - name: Get current commit info
+      id: commit_info
+      run: |
+        # Get the actual commit we checked out, not github.sha
+        commit_sha=$(git rev-parse HEAD)
+        echo "commit_sha=$commit_sha" >> $GITHUB_OUTPUT
+        short_sha=$(git rev-parse --short HEAD)
+        echo "short_sha=$short_sha" >> $GITHUB_OUTPUT
+        commit_message=$(git log -1 --pretty=format:"%s" HEAD)
+        echo "commit_message=$commit_message" >> $GITHUB_OUTPUT
+
+    - name: Delete existing stable release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # Delete tag locally and remotely
+        git tag -d stable 2>/dev/null || true
+        git push origin :refs/tags/stable 2>/dev/null || true
+
+        # Delete existing release
+        release_id=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
+          "https://api.github.com/repos/${{ github.repository }}/releases/tags/stable" \
+          | jq -r '.id // empty')
+
+        if [ ! -z "$release_id" ] && [ "$release_id" != "null" ]; then
+          curl -X DELETE -H "Authorization: Bearer $GITHUB_TOKEN" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/$release_id"
+        fi
+
+    - name: Create stable tag and release
+      run: |
+        commit_sha=${{ steps.commit_info.outputs.commit_sha }}
+        git tag stable $commit_sha
+        git push origin stable
+
+    - name: Create Stable Release
+      uses: softprops/action-gh-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: stable
+        name: "Stable Release"
+        body: |
+          This is the latest stable release of onnxruntime.
+
+          **Promoted from:** ${{ steps.commit_info.outputs.short_sha }}
+          **Commit:** ${{ steps.commit_info.outputs.commit_message }}
+          **Build:** [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+        files: |
+          artifacts/**/*.whl
