@@ -22,7 +22,7 @@ from utils import (
 # The parameters for this test are directly ported from sdk, but this test runs for both width and channelwise layernorm.
 out_fbits = 29
 wt_frac_bits = 30
-bias_frc_bits = 31
+bias_frac_bits = 31
 
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 from utils import check_shape_inference
@@ -66,11 +66,12 @@ class TestLayernormFixedPoint(unittest.TestCase):
             output_tensor = helper.make_tensor_value_info("output", TensorProto.UNDEFINED, None)
 
         inp_fbits_tensor = helper.make_tensor(name="x_frac_bits", data_type=TensorProto.INT8, dims=[], vals=[inp_fbits])
+
         scale_tensor = helper.make_tensor(
-            name="scale", data_type=TensorProto.FLOAT, dims=[input_shape[axis]], vals=scale.flatten().tolist()
+            name="scale", data_type=TensorProto.INT32, dims=[input_shape[axis]], vals=scale.flatten().tolist()
         )
         bias_tensor = helper.make_tensor(
-            name="bias", data_type=TensorProto.FLOAT, dims=[input_shape[axis]], vals=bias.flatten().tolist()
+            name="bias", data_type=TensorProto.INT32, dims=[input_shape[axis]], vals=bias.flatten().tolist()
         )
         out_fbits_tensor = helper.make_tensor(
             name="out_frac_bits", data_type=TensorProto.INT8, dims=[], vals=[self.out_data_frac_bits]
@@ -81,13 +82,14 @@ class TestLayernormFixedPoint(unittest.TestCase):
             "epsilon": self.epsilon,
             "stash_type": -1,
             "wt_fbits": wt_frac_bits,
-            "bias_fbits": bias_frc_bits,
+            "bias_fbits": bias_frac_bits,
         }
 
         node = helper.make_node(
             "LayernormFixedPoint",
             inputs=["x", "x_frac_bits", "scale", "bias", "out_frac_bits"],
             outputs=["output"],
+            name="layernorm",
             domain="com.quadric",
             **layernorm_fxp_attrs,
         )
@@ -169,7 +171,10 @@ class TestLayernormFixedPoint(unittest.TestCase):
         scale_tensor = np.random.uniform(0.5, 0.7, size=input_shape[axis]).astype(np.float32)
         bias_tensor = np.random.uniform(-0.01, 0.01, size=input_shape[axis]).astype(np.float32)
 
-        self._create_model_fixed_point(input_shape, in_frac_bits, axis, scale_tensor, bias_tensor, model_path)
+        scale_tensor_fxp = apply_fixed_point_casting(scale_tensor, wt_frac_bits, np.int32)
+        bias_tensor_fxp = apply_fixed_point_casting(bias_tensor, bias_frac_bits, np.int32)
+
+        self._create_model_fixed_point(input_shape, in_frac_bits, axis, scale_tensor_fxp, bias_tensor_fxp, model_path)
 
         np_input = apply_float_casting(in_tensor_fxp, in_frac_bits)
 
@@ -215,8 +220,12 @@ class TestLayernormFixedPoint(unittest.TestCase):
         inp_shape, in_frac_bits, axis = [1, 197, 32], 16, -1
         scale_tensor = np.random.uniform(0.5, 0.7, size=inp_shape[axis]).astype(np.float32)
         bias_tensor = np.random.uniform(-0.01, 0.01, size=inp_shape[axis]).astype(np.float32)
+
+        scale_tensor_fxp = apply_fixed_point_casting(scale_tensor, wt_frac_bits, np.int32)
+        bias_tensor_fxp = apply_fixed_point_casting(bias_tensor, bias_frac_bits, np.int32)
+
         onnx_model = self._create_model_fixed_point(
-            inp_shape, in_frac_bits, axis, scale_tensor, bias_tensor, output_info_defined=False
+            inp_shape, in_frac_bits, axis, scale_tensor_fxp, bias_tensor_fxp, output_info_defined=False
         )
         expected_shapes = [
             helper.make_tensor_value_info("output", TensorProto.INT32, inp_shape),
