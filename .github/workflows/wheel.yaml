@@ -6,6 +6,14 @@ on:
       onnxruntime_branch:
         type: string
         default: "main"
+      build_linux:
+        type: boolean
+        default: true
+        description: 'Build Linux wheel'
+      build_mac:
+        type: boolean
+        default: true
+        description: 'Build macOS wheel'
   workflow_dispatch:
     inputs:
       onnxruntime_branch:
@@ -15,6 +23,14 @@ on:
         type: boolean
         default: false
         description: 'Promote this build to stable release'
+      build_linux:
+        type: boolean
+        default: true
+        description: 'Build Linux wheel'
+      build_mac:
+        type: boolean
+        default: true
+        description: 'Build macOS wheel'
   push:
     branches:
       - main
@@ -24,6 +40,7 @@ on:
 
 jobs:
   build_and_upload_wheel_linux:
+    if: inputs.build_linux != false  # Default to true if not specified (for push/PR)
     runs-on: The_CTOs_Choice
     container:
       image: ghcr.io/quadric-io/tvm:devel
@@ -37,8 +54,6 @@ jobs:
     - name: Build ONNX Runtime wheel
       working-directory: /workspace
       run: |
-        python3 -m venv ort-venv
-        source ort-venv/bin/activate
         python3 -m pip install "cmake<4"
         ./build.sh --build_wheel --config Release --parallel ${{ github.event_name == 'pull_request' && ' ' || '--skip_tests'}} --skip_submodule_sync --allow_running_as_root --compile_no_warning_as_error
         wheel_path=$(find . -name '*.whl' | xargs readlink -f)
@@ -50,7 +65,7 @@ jobs:
         path: ${{ env.wheel_path }}
 
   build_and_upload_wheel_mac:
-    if: github.repository != 'quadric-io/sdk-cli'
+    if: (inputs.build_mac != false) && (github.repository != 'quadric-io/sdk-cli')  # Default to true if not specified
     runs-on: [self-hosted, macOS, ARM64]
     steps:
     - name: Checkout repository
@@ -58,17 +73,19 @@ jobs:
       with:
         repository: quadric-io/onnxruntime
         ref: ${{ inputs.onnxruntime_branch || github.ref }}
+
     - name: Install python dependencies
       run: |
-        python3 -m venv ort-venv
-        source ort-venv/bin/activate
+        python3 -m pip install --upgrade pip
         python3 -m pip install -r requirements.txt
         python3 -m pip install -r requirements-quadric.txt
+
     - name: Build ONNX Runtime wheel
       run: |
         ./build.sh --build_wheel --config Release --parallel ${{ github.event_name == 'pull_request' && ' ' || '--skip_tests'}} --skip_submodule_sync --compile_no_warning_as_error --skip_submodule_sync --apple_deploy_target 12
         wheel_path=$(find . -name '*.whl' | xargs readlink -f)
         echo "wheel_path=$wheel_path" >> $GITHUB_ENV
+
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
@@ -83,11 +100,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Download ort-wheel-linux artifact
+      if: inputs.build_linux != false
       uses: actions/download-artifact@v4
       with:
         name: ort-wheel-linux
         path: artifacts/
     - name: Download ort-wheel-mac artifact
+      if: inputs.build_mac != false
       uses: actions/download-artifact@v4
       with:
         name: ort-wheel-mac
