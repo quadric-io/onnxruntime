@@ -68,6 +68,21 @@ jobs:
     if: (inputs.build_mac != false) && (github.repository != 'quadric-io/sdk-cli')  # Default to true if not specified
     runs-on: [self-hosted, macOS, ARM64]
     steps:
+    - name: Debug working directory and git state
+      run: |
+        echo "=== Working Directory ==="
+        pwd
+        echo "=== Directory Contents ==="
+        ls -la
+        echo "=== Git Status ==="
+        git status || echo "Not a git repo"
+        echo "=== Git Remote ==="
+        git remote -v || echo "No remotes"
+        echo "=== Git Log ==="
+        git log --oneline -5 || echo "No commits"
+        echo "=== Checkout Details ==="
+        echo "Ref: ${{ github.ref }}"
+        echo "SHA: ${{ github.sha }}"
     - name: Checkout repository
       uses: actions/checkout@v4
       with:

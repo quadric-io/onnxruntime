@@ -1,1 +1,3 @@
 onnx==1.16.2
+wheel
+setuptools
