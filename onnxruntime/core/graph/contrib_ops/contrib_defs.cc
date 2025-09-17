@@ -3841,8 +3841,8 @@ GatherBlockQuantized is a Gather with data quantized. It is similar to Gather (h
       // Inputs
       .Input(0, "X", "N-D input tensor, expected to be int32, fixed-point representation.", "T")
       .Input(1, "x_frac_bits", "A scalar tensor representing the number of fractional bits of the input tensor (int8).", "T1")
-      .Input(2, "scale", "A scalar or 1D float tensor representing the scale factor (gamma).", "T2")
-      .Input(3, "bias", "A scalar or 1D float tensor representing the bias offset (beta).", "T3")
+      .Input(2, "scale", "A scalar or 1D fixed-point(int32) tensor representing the scale factor (gamma).", "T2")
+      .Input(3, "bias", "A scalar or 1D fixed-point(int32) tensor representing the bias offset (beta).", "T3")
       .Input(4, "out_frac_bits", "A scalar tensor representing the number of fractional bits for the final fixed-point result (int8).", "T4")
 
       // Outputs
@@ -3851,8 +3851,8 @@ GatherBlockQuantized is a Gather with data quantized. It is similar to Gather (h
       // Type Constraints
       .TypeConstraint("T", {"tensor(int32)"}, "Input tensor must be int32.")
       .TypeConstraint("T1", {"tensor(int8)"}, "Input fractional bits must be int8.")
-      .TypeConstraint("T2", {"tensor(float)"}, "Scale (gamma) must be a floating-point tensor.")
-      .TypeConstraint("T3", {"tensor(float)"}, "Bias (beta) must be a floating-point tensor.")
+      .TypeConstraint("T2", {"tensor(int32)"}, "Scale (gamma) must be a fixed-point tensor.")
+      .TypeConstraint("T3", {"tensor(int32)"}, "Bias (beta) must be a fixed-point tensor.")
       .TypeConstraint("T4", {"tensor(int8)"}, "Output fractional bits must be int8.")
       .TypeConstraint("T5", {"tensor(int32)"}, "Output tensor must be int32.")
 

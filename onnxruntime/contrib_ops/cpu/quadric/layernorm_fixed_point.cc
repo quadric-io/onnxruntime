@@ -56,13 +56,13 @@ ONNX_OPERATOR_KERNEL_EX(
     KernelDefBuilder()
         .TypeConstraint("T", DataTypeImpl::GetTensorType<int32_t>())    // Input tensor
         .TypeConstraint("T1", DataTypeImpl::GetTensorType<int8_t>())    // Input frac bits
-        .TypeConstraint("T2", DataTypeImpl::GetTensorType<float>())     // Scale
-        .TypeConstraint("T3", DataTypeImpl::GetTensorType<float>())     // bias
+        .TypeConstraint("T2", DataTypeImpl::GetTensorType<int32_t>())     // gamma
+        .TypeConstraint("T3", DataTypeImpl::GetTensorType<int32_t>())     // beta
         .TypeConstraint("T4", DataTypeImpl::GetTensorType<int8_t>())    // Output frac bits
         .TypeConstraint("T5", DataTypeImpl::GetTensorType<int32_t>()),  // Output
     LayernormFixedPoint);
 
-void calculateLayernormWidth(const std::int32_t* inp_data, std::int32_t* out_data, TensorShapeVector inpShape, std::int8_t inpFbits, std::int8_t outFbits, std::int32_t epsilonQFp, std::vector<std::int32_t> gamma = {}, std::vector<std::int32_t> beta = {}, std::int32_t wtFbits = 31, std::int32_t bFbits = 31) {
+void calculateLayernormWidth(const std::int32_t* inp_data, std::int32_t* out_data, TensorShapeVector inpShape, std::int8_t inpFbits, std::int8_t outFbits, std::int32_t epsilonQFp, const std::int32_t* gamma, const std::int32_t* beta, std::int32_t wtFbits = 31, std::int32_t bFbits = 31) {
   std::int64_t elemInBatch = inpShape[0];
   std::int64_t elemInChannel = inpShape[1];
   std::int64_t eleminHW = 0;
@@ -159,9 +159,10 @@ void calculateLayernormWidth(const std::int32_t* inp_data, std::int32_t* out_dat
     std::int32_t gammaMul = chimera::fixedPointMultiply(norm[index], gamma[w], shift);
     out_data[index] = gammaMul + (beta[w] >> biasShift);
   }
+
 }
 
-void calculateLayernormChannel(const std::int32_t* inp_data, std::int32_t* out_data, TensorShapeVector inpShape, std::int8_t inpFbits, std::int8_t outFbits, std::int32_t epsilonQFp, std::vector<std::int32_t> gamma = {}, std::vector<std::int32_t> beta = {}, std::int32_t wtFbits = 31, std::int32_t bFbits = 31) {
+void calculateLayernormChannel(const std::int32_t* inp_data, std::int32_t* out_data, TensorShapeVector inpShape, std::int8_t inpFbits, std::int8_t outFbits, std::int32_t epsilonQFp, const std::int32_t* gamma, const std::int32_t* beta, std::int32_t wtFbits = 31, std::int32_t bFbits = 31) {
   std::int64_t elemInBatch = inpShape[0];
   std::int64_t elemInChannel = inpShape[1];
   std::int64_t eleminHW = 0;
@@ -263,21 +264,21 @@ void calculateLayernormChannel(const std::int32_t* inp_data, std::int32_t* out_d
 Status LayernormFixedPoint::Compute(OpKernelContext* ctx) const {
   const Tensor* inp = ctx->Input<Tensor>(0);
   const Tensor* inpFracBitsTensor = ctx->Input<Tensor>(1);
-  const Tensor* inpScale = ctx->Input<Tensor>(2);
-  const Tensor* bias = ctx->Input<Tensor>(3);
+  const Tensor* gamma = ctx->Input<Tensor>(2);
+  const Tensor* beta = ctx->Input<Tensor>(3);
   const Tensor* outFracBits = ctx->Input<Tensor>(4);
 
   // Validate inputs
   ORT_ENFORCE(inp != nullptr, "Input is null");
   ORT_ENFORCE(inpFracBitsTensor != nullptr, "inpFracBits is null");
-  ORT_ENFORCE(inpScale != nullptr, "inpScale is null");
-  ORT_ENFORCE(bias != nullptr, "bias is null");
+  ORT_ENFORCE(gamma != nullptr, "gamma is null");
+  ORT_ENFORCE(beta != nullptr, "bias is null");
   ORT_ENFORCE(outFracBits != nullptr, "outFracBits is null");
 
   // input, scale, bias data
   const std::int32_t* inp_data = inp->Data<std::int32_t>();
-  const float* wt_data = inpScale->Data<float>();
-  const float* bias_data = bias->Data<float>();
+  const std::int32_t* gamma_data = gamma->Data<std::int32_t>();
+  const std::int32_t* beta_data = beta->Data<std::int32_t>();
 
   std::int64_t axis = layer_norm__fxp_attrs_.axis;
   float epsilon = layer_norm__fxp_attrs_.epsilon;
@@ -300,14 +301,6 @@ Status LayernormFixedPoint::Compute(OpKernelContext* ctx) const {
   // Allocate output tensor
   auto* out = ctx->Output(0, inp->Shape());
   std::int32_t* out_data = out->MutableData<int32_t>();
-  // quantize scale(gamma) and bias(beta) tensor
-  std::vector<double> scale(wt_data, wt_data + inpShape[axis]);
-  auto qs = dataToQfp(scale, wtFbits, 32, false);
-  std::vector<std::int32_t> quantScale = qs.first;
-
-  std::vector<double> biasTensor(bias_data, bias_data + inpShape[axis]);
-  auto qb = dataToQfp(biasTensor, bFbits, 32, false);
-  std::vector<std::int32_t> quantBias = qb.first;
 
   // convert epsilon to fixed-point
   std::vector<double> epsilonVec = {epsilon};
@@ -315,9 +308,9 @@ Status LayernormFixedPoint::Compute(OpKernelContext* ctx) const {
   std::int32_t epsilonQFp = static_cast<int32_t>(e.first[0]);
 
   if (axis == 1) {
-    calculateLayernormChannel(inp_data, out_data, inpShape, inpFbits, outFbits, epsilonQFp, quantScale, quantBias, wtFbits, bFbits);
+    calculateLayernormChannel(inp_data, out_data, inpShape, inpFbits, outFbits, epsilonQFp, gamma_data, beta_data, wtFbits, bFbits);
   } else if (axis == 2) {
-    calculateLayernormWidth(inp_data, out_data, inpShape, inpFbits, outFbits, epsilonQFp, quantScale, quantBias, wtFbits, bFbits);
+    calculateLayernormWidth(inp_data, out_data, inpShape, inpFbits, outFbits, epsilonQFp, gamma_data, beta_data, wtFbits, bFbits);
   } else {
     return ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_ARGUMENT, "Invalid Layernorm axes. Only width and channels allowed. axis should be 1 or 2 got", axis);
   }
