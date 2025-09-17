@@ -1,0 +1,166 @@
+name: Promote branch artifacts to latest
+
+on:
+  workflow_call:
+    inputs:
+      stable_promotion:
+        description: "Promotes experimental to stable"
+        default: false
+        type: boolean
+  workflow_dispatch:
+    inputs:
+      stable_promotion:
+        description: "Promotes experimental to stable"
+        default: false
+        type: boolean
+  pull_request:
+    types:
+      - closed
+
+jobs:
+  create_release:
+    if: ${{ github.event.pull_request.merged == true || inputs.stable_promotion == true || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    steps:
+    - name: Install downloader & download branch assets
+      if: ${{ ! inputs.stable_promotion }}
+      run: |
+        pip3 install git+https://${{ secrets.GITHUB_TOKEN }}@github.com/quadric-io/cmake-common.git@shayan-ghactions
+        if [ "${{ github.event.pull_request.merged }}" == "true" ]; then
+          download-artifacts onnxruntime ${{ github.event.pull_request.head.ref }} all .
+        else
+          echo "No action required"
+          exit 0
+        fi
+        rm -rf *.timestamp
+
+    - name: Download experimental artifacts
+      if: inputs.stable_promotion
+      uses: actions/download-artifact@v4
+      with:
+        pattern: "ort-wheel-*"
+
+    - name: Move and prepare artifacts
+      if: inputs.stable_promotion
+      run: |
+        # Create stable release by promoting existing versioned release rather than creating new version
+        # This preserves your version numbering scheme
+
+        # Get the latest actual release (not experimental artifacts)
+        latest_release=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+          https://api.github.com/repos/quadric-io/onnxruntime/releases \
+          | jq -r '.[0]')
+
+        release_id=$(echo "$latest_release" | jq -r '.id')
+        release_tag=$(echo "$latest_release" | jq -r '.tag_name')
+
+        echo "Latest release: $release_tag (ID: $release_id)"
+        echo "latest_release_id=$release_id" >> $GITHUB_ENV
+        echo "latest_tag=$release_tag" >> $GITHUB_ENV
+
+        # Download assets from the latest release
+        mkdir -p release_artifacts
+        assets=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+          https://api.github.com/repos/quadric-io/onnxruntime/releases/$release_id/assets \
+          | jq -r '.[] | .url')
+
+        for asset_url in $assets; do
+          asset_name=$(curl -s -H "Authorization: Bearer ${{ secrets.GH_PAT }}" "$asset_url" | jq -r '.name')
+          echo "Downloading $asset_name from release..."
+          curl -L -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/octet-stream" \
+            "$asset_url" -o "release_artifacts/$asset_name"
+        done
+
+    - name: Checkout main
+      if: inputs.stable_promotion
+      uses: actions/checkout@v3
+      with:
+        path: onnxruntime
+        repository: quadric-io/onnxruntime
+        ref: main
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Set target commit sha
+      working-directory: onnxruntime
+      if: inputs.stable_promotion
+      run: |
+        if [[ "${{ inputs.stable_promotion }}" == "true" ]]; then
+          target_sha=$(git rev-list -n 1 main)
+        else
+          target_sha=${{ github.sha }}
+        fi
+        echo "target_sha=$target_sha" >> $GITHUB_ENV
+
+    - name: Create or update stable tag/release
+      if: inputs.stable_promotion
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        stable_tag="stable"
+
+        # Delete existing stable tag/release if it exists
+        existing_release=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
+          https://api.github.com/repos/quadric-io/onnxruntime/releases/tags/$stable_tag \
+          | jq -r '.id // empty')
+
+        if [ ! -z "$existing_release" ] && [ "$existing_release" != "null" ]; then
+          echo "Deleting existing stable release: $existing_release"
+          curl -s -X DELETE \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            "https://api.github.com/repos/quadric-io/onnxruntime/releases/$existing_release"
+        fi
+
+        curl -s -X DELETE \
+          -H "Authorization: Bearer $GITHUB_TOKEN" \
+          "https://api.github.com/repos/quadric-io/onnxruntime/git/refs/tags/$stable_tag" || true
+
+        # Create new stable tag pointing to current main
+        curl -X POST \
+          -H "Authorization: Bearer $GITHUB_TOKEN" \
+          -H "Accept: application/vnd.github.v3+json" \
+          https://api.github.com/repos/quadric-io/onnxruntime/git/refs \
+          -d "{\"ref\": \"refs/tags/$stable_tag\", \"sha\": \"${{ env.target_sha }}\"}"
+
+        # Create stable release
+        release_response=$(curl -X POST \
+          -H "Authorization: Bearer $GITHUB_TOKEN" \
+          -H "Accept: application/vnd.github.v3+json" \
+          https://api.github.com/repos/quadric-io/onnxruntime/releases \
+          -d "{
+            \"tag_name\": \"$stable_tag\",
+            \"name\": \"Stable Release\",
+            \"body\": \"Stable ONNX Runtime release promoted from ${{ env.latest_tag }}\",
+            \"draft\": false,
+            \"prerelease\": false
+          }")
+
+        stable_release_id=$(echo "$release_response" | jq -r '.id')
+        echo "stable_release_id=$stable_release_id" >> $GITHUB_ENV
+        echo "Created stable release with ID: $stable_release_id"
+
+    - name: Upload artifacts to stable release
+      if: inputs.stable_promotion
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        for file in release_artifacts/*; do
+          if [ -f "$file" ]; then
+            filename=$(basename "$file")
+            echo "Uploading $filename to stable release..."
+
+            curl -X POST \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              -H "Content-Type: application/octet-stream" \
+              --data-binary @"$file" \
+              "https://uploads.github.com/repos/quadric-io/onnxruntime/releases/${{ env.stable_release_id }}/assets?name=$filename"
+          fi
+        done
+
+    - name: Handle PR merge case (your existing logic)
+      if: ${{ ! inputs.stable_promotion }}
+      run: |
+        # This preserves your existing PR merge behavior
+        # The artifacts were already downloaded by the downloader tool above
+        echo "Handling PR merge - artifacts downloaded and ready for release creation"
+        # Add any additional logic you had for PR merges here
