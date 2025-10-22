@@ -3877,6 +3877,45 @@ GatherBlockQuantized is a Gather with data quantized. It is similar to Gather (h
         updateOutputShape(ctx, 0, input_shape);
       });
 
+    ONNX_CONTRIB_OPERATOR_SCHEMA(GeluFixedPoint)
+      .SetDomain(kQuadricDomain)
+      .SinceVersion(1)
+      .SetDoc(R"DOC(
+      Gelu takes one input data (Tensor) and produces one output data (Tensor) where the gaussian error linear units function,
+      is applied to the tensor elementwise. The frac bits analysis is based on the one done inside tvm.
+      )DOC")
+
+      // Inputs
+      .Input(0, "inp", "N-D input tensor, expected to be int32, fixed-point representation.", "T")
+      .Input(1, "inp_frac_bits", "A scalar tensor representing the number of input fractional bits.", "T1")
+      .Input(2, "out_frac_bits", "A scalar tensor representing the number of output fractional bits.", "T2")
+
+      // Outputs
+      .Output(0, "Y", "N-D output tensor, quantized to signed int32.", "T3")
+
+      // Type Constraints
+      .TypeConstraint("T", {"tensor(int32)"}, "Input tensor must be int32.")
+      .TypeConstraint("T1", {"tensor(int8)"}, "Input fractional b")
+      .TypeConstraint("T2", {"tensor(int8)"}, "Output fractional bits must be int8.")
+      .TypeConstraint("T3", {"tensor(int32)"}, "Output tensor must be int32.")
+
+      // Attributes type constraints
+      .Attr("approximate", "Gelu approximation algorithm: tanh, none(default). none: do not use approximation. tanh: use tanh approximation.", ONNX_NAMESPACE::AttributeProto::STRING, "none")
+
+      // Shape Inference
+      .TypeAndShapeInferenceFunction([](ONNX_NAMESPACE::InferenceContext& ctx) {
+        // Output tensor 'out' has the same shape as the input tensor 'inp'.
+        propagateShapeAndTypeFromFirstInput(ctx);
+
+        auto y_type = ctx.getOutputType(0);
+        y_type->mutable_tensor_type()->set_elem_type(ONNX_NAMESPACE::TensorProto::INT32);
+        if (!hasInputShape(ctx, 0))
+          return;
+
+        auto& input_shape = getInputShape(ctx, 0);
+        updateOutputShape(ctx, 0, input_shape);
+      });
+
 #ifdef ENABLE_TRAINING_OPS
   // Should remove the shrunken_gather include from ENABLE_TRAINING_OPS once 1). compute optimizer is enabled for inference or
   // 2). this is needed by inference for other purpose.
