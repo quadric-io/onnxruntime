@@ -1,1 +1,3 @@
-onnx==1.16.2
+# onnx Python package intentionally omitted: ORT 1.20.0 supports IR<=10 but
+# onnx>=1.20.0 (the only versions with cp314 wheels) produces IR 13.
+# The C++ onnx library is fetched via CMake for the build itself.
