@@ -22,7 +22,7 @@ jobs:
   build_and_upload_wheel_linux:
     runs-on: The_CTOs_Choice
     container:
-      image: ghcr.io/quadric-io/tvm:devel
+      image: ghcr.io/quadric-io/tvm:ubuntu-build-llvm-py14
       options: "--mount type=bind,source=${{ github.workspace }},target=/workspace"
     steps:
     - name: Checkout repository
@@ -52,13 +52,16 @@ jobs:
       with:
         repository: quadric-io/onnxruntime
         ref: ${{ inputs.onnxruntime_branch || github.ref }}
-    - name: Install python dependencies
+    - name: Setup venv and install dependencies
       run: |
+        python3.14 -m venv venv
+        source venv/bin/activate
+        python3 -m pip install setuptools wheel
         python3 -m pip install -r requirements.txt
-        python3 -m pip install -r requirements-quadric.txt
     - name: Build ONNX Runtime wheel
       run: |
-        ./build.sh --build_wheel --config Release --parallel ${{ github.event_name == 'pull_request' && ' ' || '--skip_tests'}} --skip_submodule_sync --compile_no_warning_as_error --skip_submodule_sync --apple_deploy_target 12
+        source venv/bin/activate
+        ./build.sh --build_wheel --config Release --parallel ${{ github.event_name == 'pull_request' && ' ' || '--skip_tests'}} --skip_submodule_sync --compile_no_warning_as_error --skip_submodule_sync --apple_deploy_target 12 --cmake_extra_defines Python_EXECUTABLE=$(which python3.14)
         wheel_path=$(find . -name '*.whl' | xargs readlink -f)
         echo "wheel_path=$wheel_path" >> $GITHUB_ENV
     - name: Upload Artifact
