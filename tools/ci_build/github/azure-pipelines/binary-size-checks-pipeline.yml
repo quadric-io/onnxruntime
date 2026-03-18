@@ -1,0 +1,21 @@
+parameters:
+- name: DoBuildWithDebugInfo
+  displayName: Create additional build with debug information?
+  type: boolean
+  default: false
+
+resources:
+  repositories:
+  - repository: manylinux
+    type: Github
+    endpoint: Microsoft
+    name: pypa/manylinux
+    ref: 5eda9aded5462201e6310105728d33016e637ea7
+
+stages:
+- template: templates/android-binary-size-check-stage.yml
+  parameters:
+    Name: MinimalBaseline
+    BuildConfigFile: "tools/ci_build/github/linux/ort_minimal/build_check_binsize_config/android_minimal_baseline.config"
+    BinarySizeThresholdInBytes: 1306224
+    DoBuildWithDebugInfo: ${{ parameters.DoBuildWithDebugInfo }}

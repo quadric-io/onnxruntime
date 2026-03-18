@@ -1,0 +1,24 @@
+resources:
+  pipelines:
+  - pipeline: build
+    source: 'Python-CUDA-Packaging-Pipeline'
+    trigger: true
+    branch: main # branch to pick the artifact, Used only for manual triggered pipeline runs for testing the pipeline itself
+
+stages:
+  # ****The following Stage depend on all previous tags. ***
+  # GPU resources are very limited,
+  # To utilize gpu resource more efficiently, run GPU job only after all cpus jobs succeed
+  - stage: Linux_Test_GPU_x86_64_stage
+    dependsOn:
+    jobs:
+      - template: templates/py-packaging-linux-test-cuda.yml
+        parameters:
+          arch: 'x86_64'
+          machine_pool: 'Onnxruntime-Linux-GPU'
+          python_wheel_suffix: '_gpu'
+          timeout: 480
+          docker_base_image: onnxruntimebuildcache.azurecr.io/internal/azureml/onnxruntime/build/cuda12_x64_ubi8_gcc12:20241020.1
+          trt_version: '10.4.0.26-1.cuda12.6'
+          cuda_version: '12.2'
+
