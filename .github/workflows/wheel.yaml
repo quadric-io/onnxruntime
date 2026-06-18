@@ -48,7 +48,7 @@ jobs:
     runs-on: [self-hosted, macOS, ARM64]
     strategy:
       matrix:
-        python-version: ["3.10", "3.14"]
+        python-version: ["3.9", "3.10", "3.14"]
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -84,6 +84,11 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         name: ort-wheel-linux
+        path: artifacts/
+    - name: Download ort-wheel-mac-py3.9 artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: ort-wheel-mac-py3.9
         path: artifacts/
     - name: Download ort-wheel-mac-py3.10 artifact
       uses: actions/download-artifact@v4

@@ -4,14 +4,14 @@ This repository contains the a distribution of onnxruntime with additional opera
 
 
 ## Prerequisites:
-- python 3.9
+- python 3.9 or 3.10
 - pip
 
 ## Clone repository and build:
 ```
 git clone --recursive https://github.com/quadric-io/onnxruntime onnxruntime
 cd onnxruntime
-python3.9 -m venv venv
+python3.10 -m venv venv  # or python3.9
 source venv/bin/activate
 # some newer version of cmake may not be backward compatible.
 pip3 install cmake==3.31
@@ -33,7 +33,7 @@ pip3 install wheel packaging numpy==1.24.4
 ```
 # Find the wheel you just created
 $ find . -name '*.whl'
-./build/MacOS/Release/dist/onnxruntime-1.16.0-cp39-cp39-macosx_13_0_arm64.whl
+./build/MacOS/Release/dist/onnxruntime-1.16.0-cp310-cp310-macosx_13_0_arm64.whl
 # Install it
-pip3 install ./build/MacOS/Release/dist/onnxruntime-1.16.0-cp39-cp39-macosx_13_0_arm64.whl
+pip3 install ./build/MacOS/Release/dist/onnxruntime-1.16.0-cp310-cp310-macosx_13_0_arm64.whl
 ```
