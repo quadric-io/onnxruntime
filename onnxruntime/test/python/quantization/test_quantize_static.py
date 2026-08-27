@@ -7,8 +7,10 @@
 
 import tempfile
 import unittest
+from importlib import import_module
 from importlib.util import find_spec
 from pathlib import Path
+from unittest import mock
 
 import numpy as np
 import onnx
@@ -22,7 +24,7 @@ from op_test_utils import (
 )
 
 import onnxruntime as ort
-from onnxruntime.quantization import QuantType, StaticQuantConfig, quantize, quantize_static
+from onnxruntime.quantization import CalibrationMethod, QuantType, StaticQuantConfig, quantize, quantize_static
 
 
 def construct_test_model(test_model_path, channel_size):
@@ -140,6 +142,32 @@ class TestStaticQuantization(unittest.TestCase):
             atol=0.01,
             err_msg="Outputs from strided and non-strided models are not close enough.",
         )
+
+    def test_calib_percentile_is_forwarded_to_calibrator(self):
+        """CalibPercentile must reach create_calibrator, otherwise the percentile calibrator
+        silently falls back to its default percentile."""
+        # onnxruntime.quantization re-exports the quantize() function under the name of its
+        # own module, so the module object has to be looked up explicitly.
+        quantize_module = import_module("onnxruntime.quantization.quantize")
+        captured_extra_options = {}
+        original_create_calibrator = quantize_module.create_calibrator
+
+        def spy_create_calibrator(*args, **kwargs):
+            captured_extra_options.update(kwargs.get("extra_options", {}))
+            return original_create_calibrator(*args, **kwargs)
+
+        data_reader = input_feeds_neg_one_zero_one(10, {"input": [1, self._channel_size, 1, 3]})
+        quant_model_path = str(Path(self._tmp_model_dir.name) / "quant.percentile.onnx")
+        with mock.patch.object(quantize_module, "create_calibrator", spy_create_calibrator):
+            quantize_static(
+                self._model_fp32_path,
+                quant_model_path,
+                data_reader,
+                calibrate_method=CalibrationMethod.Percentile,
+                extra_options={"CalibPercentile": 99.9},
+            )
+
+        self.assertEqual(captured_extra_options.get("percentile"), 99.9)
 
     def test_static_quant_config(self):
         data_reader = input_feeds_neg_one_zero_one(10, {"input": [1, self._channel_size, 1, 3]})
