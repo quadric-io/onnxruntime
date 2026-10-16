@@ -10,22 +10,38 @@
 
 #include "core/common/logging/capture.h"
 #include "core/common/logging/isink.h"
+#include "core/common/logging/logging.h"
+
+// gmock prints the arguments of mocked calls, and would print a bare Timestamp with C++20 std::chrono's operator<<,
+// which needs macOS 13.3+. The mocks receive the Timestamp wrapped in this type, which prints through timestamp_ns.
+struct MockTimestamp {
+  ::onnxruntime::logging::Timestamp value;
+};
+
+inline std::ostream& operator<<(std::ostream& os, const MockTimestamp& timestamp) {
+  // handle ambiguity with C++20 where date and std::chrono have operator<<
+  return ::onnxruntime::logging::timestamp_ns::operator<<(os, timestamp.value);
+}
 
 class MockSink : public ::onnxruntime::logging::ISink {
  public:
-  MOCK_METHOD3(SendImpl, void(const ::onnxruntime::logging::Timestamp& timestamp,
+  using ISink::ISink;
+
+  MOCK_METHOD3(SendImpl, void(MockTimestamp timestamp,
                               const std::string& logger_id,
                               const ::onnxruntime::logging::Capture& message));
+
+ private:
+  void SendImpl(const ::onnxruntime::logging::Timestamp& timestamp,
+                const std::string& logger_id,
+                const ::onnxruntime::logging::Capture& message) override {
+    SendImpl(MockTimestamp{timestamp}, logger_id, message);
+  }
 };
 
-class MockEtwSink : public ::onnxruntime::logging::ISink {
+class MockEtwSink : public MockSink {
  public:
-  MockEtwSink() : ISink(onnxruntime::logging::SinkType::EtwSink) {}
-  ~MockEtwSink() = default;
-
-  MOCK_METHOD3(SendImpl, void(const ::onnxruntime::logging::Timestamp& timestamp,
-                              const std::string& logger_id,
-                              const ::onnxruntime::logging::Capture& message));
+  MockEtwSink() : MockSink(onnxruntime::logging::SinkType::EtwSink) {}
 };
 
 // The ACTION*() macros trigger warning C4100 (unreferenced formal
@@ -39,10 +55,8 @@ class MockEtwSink : public ::onnxruntime::logging::ISink {
 #endif
 
 ACTION(PrintArgs) {
-  using onnxruntime::logging::timestamp_ns::operator<<;
-
-  // const Timestamp &timestamp, const std::string &logger_id, const Message &message
-  //                  arg0                          arg1                        arg2
+  // const MockTimestamp &timestamp, const std::string &logger_id, const Message &message
+  //                      arg0                          arg1                        arg2
   std::cout << arg1 << "@" << arg0 << " "
             << arg2.SeverityPrefix() << ":" << arg2.Category() << ":"
             << arg2.Location().ToString(::onnxruntime::CodeLocation::kFilenameAndPath) << " " << arg2.Message() << std::endl;
