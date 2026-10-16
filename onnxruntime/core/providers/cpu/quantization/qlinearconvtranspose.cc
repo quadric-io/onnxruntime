@@ -67,6 +67,25 @@ class QLinearConvTranspose : public OpKernel {
     return X_scale_value * W_scale_value / Y_scale_value;
   }
 
+  static void ComputeOffset(OpKernelContext* context,
+                            ActType& X_zero_point_value,
+                            ActType& W_zero_point_value,
+                            ActType& Y_zero_point_value) {
+    const Tensor* X_zero_point = context->Input<Tensor>(InputTensors::IN_X_ZERO_POINT);
+    const Tensor* W_zero_point = context->Input<Tensor>(InputTensors::IN_W_ZERO_POINT);
+    const Tensor* Y_zero_point = context->Input<Tensor>(InputTensors::IN_Y_ZERO_POINT);
+    ORT_ENFORCE(IsScalarOr1ElementVector(X_zero_point),
+                "QLinearConvTranspose : input zero point must be a scalar or 1D tensor of size 1");
+    ORT_ENFORCE(IsScalarOr1ElementVector(Y_zero_point),
+                "QLinearConvTranspose : result zero point must be a scalar or 1D tensor of size 1");
+    ORT_ENFORCE(IsScalarOr1ElementVector(W_zero_point),
+                "QLinearConvTranspose : filter zero point must be a scalar or 1D tensor of size 1");
+
+    X_zero_point_value = *(X_zero_point->Data<ActType>());
+    Y_zero_point_value = *(Y_zero_point->Data<ActType>());
+    W_zero_point_value = *(W_zero_point->Data<ActType>());
+  }
+
   enum InputTensors : int {
     IN_X = 0,
     IN_X_SCALE = 1,
@@ -127,8 +146,10 @@ Status QLinearConvTranspose<T>::DoConvTranspose(OpKernelContext* context) const 
     return Status::OK();
   }
 
-  // Quantization parameters, only support symmetric quant for now
+  // Quantization parameters
   float scale_value = ComputeOutputScale(context);
+  T X_zero_point_value, W_zero_point_value, Y_zero_point_value;
+  ComputeOffset(context, X_zero_point_value, W_zero_point_value, Y_zero_point_value);
 
   const int64_t X_offset = p.num_input_channels / conv_transpose_attrs_.group * input_image_size;
   const int64_t Y_offset = p.Y->Shape().Size() / p.Y->Shape()[0] / conv_transpose_attrs_.group;
@@ -144,9 +165,8 @@ Status QLinearConvTranspose<T>::DoConvTranspose(OpKernelContext* context) const 
   auto col_data = alloc->Alloc(SafeInt<size_t>(sizeof(ActType)) * col_buffer_size);
   BufferUniquePtr col_buffer(col_data, BufferDeleter(alloc));
 
-  // Pre-transpose the weight matrix because MatMul does not take transpose params
-  const int64_t trans_filt_size = p.num_input_channels / conv_transpose_attrs_.group * kernel_dim;
-  auto trans_filt_data = alloc->Alloc(SafeInt<size_t>(sizeof(T)) * trans_filt_size);
+  // Pre-transpose each group's weight matrix because MatMul does not take transpose params
+  auto trans_filt_data = alloc->Alloc(SafeInt<size_t>(sizeof(T)) * p.F->Shape().Size());
   BufferUniquePtr trans_filt(trans_filt_data, BufferDeleter(alloc));
   ActType* col_buffer_data = static_cast<ActType*>(col_buffer.get());
 
@@ -154,26 +174,29 @@ Status QLinearConvTranspose<T>::DoConvTranspose(OpKernelContext* context) const 
   const T* filter_data = p.F->Data<T>();
   T* Ydata = p.Y->MutableData<T>();
   TensorShape output_shape = p.Y->Shape().Slice(2);
-  MlasTranspose(
-      filter_data,
-      static_cast<T*>(trans_filt.get()),
-      p.num_input_channels / conv_transpose_attrs_.group,
-      kernel_dim);
+  for (int group_id = 0; group_id < conv_transpose_attrs_.group; ++group_id) {
+    MlasTranspose(
+        filter_data + group_id * W_offset,
+        static_cast<T*>(trans_filt.get()) + group_id * W_offset,
+        p.num_input_channels / conv_transpose_attrs_.group,
+        kernel_dim);
+  }
 
-  //TODO: add support for assymmetric quantization and using int8 MlassGemm. This will require offseting the
-  //input data to an uint8 range and passing a zero point parameter.
-  //For now compute the GEMM in int32, as MlassGemm requires uint8 input and MlasSymmQgemmBatch is ARM only
+  //TODO: use int8 MlassGemm. This will require offseting the input data to an uint8 range and passing a zero
+  //point parameter.
+  //For now compute the GEMM in int32, as MlassGemm requires uint8 input and MlasSymmQgemmBatch is ARM only.
+  //The input and weight zero points are subtracted while widening to int32.
   auto inp_i32_buffer = alloc->Alloc(SafeInt<size_t>(sizeof(ActType)) * p.X->Shape().Size());
   BufferUniquePtr inp_i32(inp_i32_buffer, BufferDeleter(alloc));
   ActType* inp_i32_data = static_cast<ActType*>(inp_i32.get());
   for (std::int64_t i = 0; i < p.X->Shape().Size(); i++) {
-    inp_i32_data[i] = Xdata[i];
+    inp_i32_data[i] = Xdata[i] - X_zero_point_value;
   }
   auto wt_i32_buffer = alloc->Alloc(SafeInt<size_t>(sizeof(ActType)) * p.F->Shape().Size());
   BufferUniquePtr wt_i32(wt_i32_buffer, BufferDeleter(alloc));
   ActType* wt_i32_data = static_cast<ActType*>(wt_i32.get());
   for (std::int64_t i = 0; i < p.F->Shape().Size(); i++) {
-    wt_i32_data[i] = static_cast<T*>(trans_filt.get())[i];
+    wt_i32_data[i] = static_cast<T*>(trans_filt.get())[i] - W_zero_point_value;
   }
   auto out_i32_buffer = alloc->Alloc(SafeInt<size_t>(sizeof(ActType)) * p.Y->Shape().Size());
   BufferUniquePtr out_i32(out_i32_buffer, BufferDeleter(std::move(alloc)));
@@ -219,12 +242,12 @@ Status QLinearConvTranspose<T>::DoConvTranspose(OpKernelContext* context) const 
                          nullptr,
                          &scale_value,
                          false,
-                         (T)0,
+                         Y_zero_point_value,
                          0,
                          0,
                          p.num_output_channels,
                          p.Y->Shape()[2] * p.Y->Shape()[3]);
-    Xdata += X_offset * conv_transpose_attrs_.group;
+    inp_i32_data += X_offset * conv_transpose_attrs_.group;
     Ydata += Y_offset * conv_transpose_attrs_.group;
   }
 
