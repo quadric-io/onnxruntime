@@ -29,7 +29,7 @@
 
 namespace onnxruntime {
 
-template <typename ActType>
+template <typename T>
 class QLinearConvTranspose : public OpKernel {
  public:
   explicit QLinearConvTranspose(const OpKernelInfo& info) : OpKernel(info), conv_transpose_attrs_(info) {
@@ -54,11 +54,11 @@ class QLinearConvTranspose : public OpKernel {
     const Tensor* W_scale = context->Input<Tensor>(InputTensors::IN_W_SCALE);
     const Tensor* Y_scale = context->Input<Tensor>(InputTensors::IN_Y_SCALE);
     ORT_ENFORCE(IsScalarOr1ElementVector(X_scale),
-                "QLinearConv : input scale must be a scalar or 1D tensor of size 1");
+                "QLinearConvTranspose : input scale must be a scalar or 1D tensor of size 1");
     ORT_ENFORCE(IsScalarOr1ElementVector(Y_scale),
-                "QLinearConv : result scale must be a scalar or 1D tensor of size 1");
+                "QLinearConvTranspose : result scale must be a scalar or 1D tensor of size 1");
     ORT_ENFORCE(IsScalarOr1ElementVector(W_scale),
-                "QLinearConv : filter scale must be a scalar or 1D tensor of size 1");
+                "QLinearConvTranspose : filter scale must be a scalar or 1D tensor of size 1");
 
     auto X_scale_value = *(X_scale->Data<float>());
     auto Y_scale_value = *(Y_scale->Data<float>());
@@ -68,9 +68,9 @@ class QLinearConvTranspose : public OpKernel {
   }
 
   static void ComputeOffset(OpKernelContext* context,
-                            ActType& X_zero_point_value,
-                            ActType& W_zero_point_value,
-                            ActType& Y_zero_point_value) {
+                            T& X_zero_point_value,
+                            T& W_zero_point_value,
+                            T& Y_zero_point_value) {
     const Tensor* X_zero_point = context->Input<Tensor>(InputTensors::IN_X_ZERO_POINT);
     const Tensor* W_zero_point = context->Input<Tensor>(InputTensors::IN_W_ZERO_POINT);
     const Tensor* Y_zero_point = context->Input<Tensor>(InputTensors::IN_Y_ZERO_POINT);
@@ -81,9 +81,9 @@ class QLinearConvTranspose : public OpKernel {
     ORT_ENFORCE(IsScalarOr1ElementVector(W_zero_point),
                 "QLinearConvTranspose : filter zero point must be a scalar or 1D tensor of size 1");
 
-    X_zero_point_value = *(X_zero_point->Data<ActType>());
-    Y_zero_point_value = *(Y_zero_point->Data<ActType>());
-    W_zero_point_value = *(W_zero_point->Data<ActType>());
+    X_zero_point_value = *(X_zero_point->Data<T>());
+    Y_zero_point_value = *(Y_zero_point->Data<T>());
+    W_zero_point_value = *(W_zero_point->Data<T>());
   }
 
   enum InputTensors : int {
@@ -236,9 +236,9 @@ Status QLinearConvTranspose<T>::DoConvTranspose(OpKernelContext* context) const 
     }
 
     MlasRequantizeOutput(out_i32_data,
-                         p.Y->Shape()[2] * p.Y->Shape()[3],
+                         output_size,
                          Ydata,
-                         p.Y->Shape()[2] * p.Y->Shape()[3],
+                         output_size,
                          nullptr,
                          &scale_value,
                          false,
@@ -246,7 +246,7 @@ Status QLinearConvTranspose<T>::DoConvTranspose(OpKernelContext* context) const 
                          0,
                          0,
                          p.num_output_channels,
-                         p.Y->Shape()[2] * p.Y->Shape()[3]);
+                         output_size);
     inp_i32_data += X_offset * conv_transpose_attrs_.group;
     Ydata += Y_offset * conv_transpose_attrs_.group;
   }
