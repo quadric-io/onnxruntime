@@ -14,11 +14,12 @@ using namespace ::onnxruntime::logging;
 class CapturingSink : public logging::ISink {
  public:
   void SendImpl(const Timestamp& timestamp, const std::string& logger_id, const Capture& message) override {
-    // operator for formatting of timestamp in ISO8601 format including microseconds
-    using timestamp_ns::operator<<;
     std::ostringstream msg;
 
-    msg << timestamp << " [" << message.SeverityPrefix() << ":" << message.Category() << ":" << logger_id << ", "
+    // operator for formatting of timestamp in ISO8601 format including microseconds.
+    // handle ambiguity with C++20 where date and std::chrono have operator<<
+    timestamp_ns::operator<<(msg, timestamp);
+    msg << " [" << message.SeverityPrefix() << ":" << message.Category() << ":" << logger_id << ", "
         << message.Location().ToString() << "] " << message.Message();
 
     messages_.push_back(msg.str());
