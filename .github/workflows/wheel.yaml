@@ -112,7 +112,7 @@ jobs:
         echo "next_tag=$next_tag" >> $GITHUB_ENV
         echo "next_tag=$next_tag" >> $GITHUB_OUTPUT
     - name: Create Release and Upload Both Assets
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v3
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
