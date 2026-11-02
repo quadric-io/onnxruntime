@@ -26,7 +26,7 @@ jobs:
       options: "--mount type=bind,source=${{ github.workspace }},target=/workspace"
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
       with:
         repository: quadric-io/onnxruntime
         ref: ${{ inputs.onnxruntime_branch || github.ref }}
@@ -48,7 +48,7 @@ jobs:
     runs-on: [self-hosted, macOS, ARM64]
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
       with:
         repository: quadric-io/onnxruntime
         ref: ${{ inputs.onnxruntime_branch || github.ref }}
